@@ -1,0 +1,14 @@
+
+Artists(filter: {date__gt: date}) {
+    
+    artworks (filter: {}) {
+        name
+    }
+    
+    connection (first: 5) {
+        artworks {
+            title
+        }
+    }
+
+}
