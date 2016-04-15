@@ -24,15 +24,21 @@ class Test(unittest.TestCase):
             pass
         db = self.db = orm.Database('sqlite', self.db_name, create_db=True)
         
+        class Genre(db.Entity):
+            name = orm.Required(str)
+            artists = orm.Set('Artist')
+        
         class Artist(db.Entity):
             name = orm.Required(str)
             age = orm.Optional(int)
+            genres = orm.Set(Genre)
 
         
         db.generate_mapping(check_tables=True, create_tables=True)
     
-        with orm.db_session:            
-            a = Artist(name='Sia', age=40)
+        with orm.db_session:
+            pop = Genre(name='pop')
+            a = Artist(name='Sia', age=40, genres=[pop])
     
         pony.options.INNER_JOIN_SYNTAX = True
     
@@ -47,14 +53,18 @@ class Test(unittest.TestCase):
             
         ast = parse('''
         query {
-            ArtistSet {
+            Artist {
                 age
+                genres {
+                    name
+                }
             }
         }
         ''')
         with orm.db_session:
             result = execute(schema, None, ast)
             print(result.data)
+            self.assertFalse(result.errors)
     
     def test_query(self):
         1

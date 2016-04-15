@@ -9,36 +9,24 @@ from graphql.core.type import GraphQLID, GraphQLInputObjectType, \
     
 from graphql.core.type.schema import GraphQLSchema
 
-from _types import SetType
+from _types import RootEntitySetField
 
 def generate_schema(db):
-    # types = []
-    # for name, val in namespace.items():
-    #     if isinstance(val, Entity):
-    #         t = EntityType(name, val)
-    #         types.append(t)
-    # result = {}
-    # for t in types:
-    #     t.process(types=result)
-    # return result
-    
     entities = {k: v for k, v in db.__dict__.items()
         if isinstance(v, type)
         if issubclass(v, db.Entity)
         if v is not db.Entity
     }
     
-    result = {}
-    
-    for name, entity in entities.items():
-        typ = SetType(entity, result)
-        result[name] = typ.get_graphql_type()
-    
-    print('schema: ', result)
-    
+    _types = {}
+    fields = {
+        name: RootEntitySetField(entity, _types).as_graphql()
+        for name, entity in entities.items()
+    }
+
     root = GraphQLObjectType(
         name='Query',
-        fields=result
+        fields=fields
     )
 
     return GraphQLSchema(query=root)
