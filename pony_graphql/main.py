@@ -11,23 +11,52 @@ from graphql.core.type.schema import GraphQLSchema
 
 from _types import RootEntitySetField
 
-def generate_schema(db):
-    entities = {k: v for k, v in db.__dict__.items()
-        if isinstance(v, type)
-        if issubclass(v, db.Entity)
-        if v is not db.Entity
-    }
-    
+
+
+
+
+
+# class AddPostMutation(RelayMutation):
+#     name = 'AddPost'
+
+#     def get_input_fields(self):
+#         return {
+#             'parent_id': GraphQLInputObjectField(GraphQLInt),
+#             'title': GraphQLInputObjectField(GraphQLString),
+#             'text': GraphQLInputObjectField(GraphQLString),
+#             'tags': GraphQLInputObjectField(GraphQLList(GraphQLString)),
+#         }
+
+
+#     def get_output_fields(self):
+#         return {
+#             'post': GraphQLField(PostType),
+#         }
+
+#     def mutate(self, **params):
+#         params['parent'] = params.pop('parent_id')
+#         return asobj({'post': create_post(**params)})
+
+
+# MutationType = GraphQLObjectType('Mutation', {
+#     'addPost': AddPostMutation.build()
+
+# })
+
+
+
+
+
+
+
+def generate_schema(db):  
     _types = {}
     fields = {
         name: RootEntitySetField(entity, _types).as_graphql()
-        for name, entity in entities.items()
+        for name, entity in db.entities.items()
     }
 
-    root = GraphQLObjectType(
-        name='Query',
-        fields=fields
-    )
+    query = GraphQLObjectType(name='Query', fields=fields)
 
-    return GraphQLSchema(query=root)
+    return GraphQLSchema(query=query)
 

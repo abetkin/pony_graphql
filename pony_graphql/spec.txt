@@ -5,8 +5,8 @@ Artists(filter: {date__gt: date}) {
         name
     }
     
-    connection (first: 5) {
-        artworks {
+    connections {
+        artworks (filter: {}) {
             title
         }
     }
