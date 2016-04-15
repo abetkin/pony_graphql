@@ -43,15 +43,18 @@ class Test(unittest.TestCase):
     def test_generation(self):
         schema = generate_schema(self.db)
         
+        
+            
         ast = parse('''
         query {
-            Artist {
+            ArtistSet {
                 age
             }
         }
         ''')
-
-        result = execute(schema, None, ast)
+        with orm.db_session:
+            result = execute(schema, None, ast)
+            print(result.data)
     
     def test_query(self):
         1

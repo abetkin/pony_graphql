@@ -59,57 +59,70 @@ class SetType(object):
     Actually, queryset
     '''
 
-    # field_handlers = {
-    # #   py_type: klass
-    # }
-
     def as_connection(self):
         ''
 
-    
-
-    # @property
-    # def name(self):
-    #     return self.__class__.__name__
-
-    # getters = {'id': 'get_by_id'}
-
-    def __init__(self, name, entity, query=None):
-        self.name = name
+    def __init__(self, entity, schema):
+        # self.name = name
         self.entity = entity
-        
-        
-
-    # def resolve(parent, )
-
-    
-        
-    def fetch(self, query):
-        return self.entity._find_one_(query)
-
+        self.schema = schema
 
     def __call__(self, obj, args, info):
-        ipdb.set_trace()
-        return SetObject(query)
+        if 'obj is root':
+            qs = select(o for o in self.entity)[:]
+            print('qs = ', qs)
+            return qs
 
-    def _make_fields(self, types):
+    @property
+    def name(self):
+        return '%sSet' % self.entity.__name__
+
+    def process(self):
+        1
+
+    # make
+    def get_graphql_type(self):
+        if self.name in self.schema:
+            return self.schema[self.name]
+        entity_type = EntityType(self.entity, self.schema).get_graphql_type()
+        list_type = GraphQLList(entity_type)
+        field_type = GraphQLField(list_type, resolver=self)
+        self.schema[self.name] = field_type
+        return field_type
+
+
+class EntityType(object):
+
+    def __init__(self, entity, schema):
+        self.entity = entity
+        self.schema = schema
+
+    def _make_fields(self):
         for attr in self.entity._attrs_:
             FieldType = Attr.py_type_handler(attr.py_type)
             field = FieldType(attr)
-            yield attr.name, field.to_graphql(types)
+            yield attr.name, field.get_graphql_type()
 
+    @property
+    def name(self):
+        return self.entity.__name__
 
-
-    def to_graphql(self, types=0):
-        fields = self._make_fields(types)
+    def get_graphql_type(self):
+        if self.name in self.schema:
+            return self.schema[self.name]
+        fields = self._make_fields()
         object_type = GraphQLObjectType(
             name=self.name,
             fields=dict(fields),
             )
-        return GraphQLField(object_type, resolver=self)
+        self.schema[self.name] = object_type
+        return object_type
+        
+        
+        
 
 
-class SetResolver(object):
+class SetObject(object):
     
     def __init__(self, _set):
         entity = 2
@@ -136,14 +149,14 @@ class SetAttrType(SetType):
 # @Attr.register(int)
 class IntType(Attr):
     
-    def to_graphql(self, types):
+    def get_graphql_type(self):
         return GraphQLField(GraphQLInt)
 
 
 # @Attr.register(str)
 class StrType(Attr):
     
-    def to_graphql(self, types):
+    def get_graphql_type(self):
         return GraphQLField(GraphQLString)
         
         

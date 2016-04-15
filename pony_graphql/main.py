@@ -31,8 +31,10 @@ def generate_schema(db):
     result = {}
     
     for name, entity in entities.items():
-        typ = SetType(name, entity)
-        result[name] = typ.to_graphql()
+        typ = SetType(entity, result)
+        result[name] = typ.get_graphql_type()
+    
+    print('schema: ', result)
     
     root = GraphQLObjectType(
         name='Query',
