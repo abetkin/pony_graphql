@@ -12,13 +12,36 @@ import ipdb, IPython
 
 from singledispatch import singledispatch
 
+# TODO metaclass instead of decorator ?
 
-class AttrField(object):
+class Type(object):
+
+    def __init__(self, py_type, types_dict):
+        self.py_type = py_type
+        self.types_dict = types_dict
+    
+    @classmethod
+    def from_attr(cls, attr, types_dict):
+        instance = cls(attr.py_type, types_dict)
+        instance.attr = attr
+        return instance
+        
+    def as_graphql(self):
+        raise NotImplementedError
+
+    def make_field(self, resolver=None):
+        return GraphQLField(self.as_graphql())
 
     def _dispatcher(py_type):
-        return AttrField
-    
-    _dispatcher = singledispatch(_dispatcher)
+        return CustomType
+
+    _dispatcher = singledispatch(_dispatcher) 
+
+
+    def dispatch_attr(cls, attr):
+        if isinstance(attr, Set):
+            return EntitySetType
+        return cls.dispatch(attr.py_type)
 
     @classmethod
     def dispatch(cls, py_type):
@@ -37,40 +60,52 @@ class AttrField(object):
             return klass
         return decorate
 
-    def __init__(self, attr, types_dict):
-        self.attr = attr
-        self.types_dict = types_dict
+
+class CustomType(Type):
+    pass
+
+
+
+
+# TODO filter: {}
+#
+
+# TODO tell executor about db_session
+
+@Type.register(core.Entity)
+class EntityType(Type):
+
+    def __init__(self, entity, types_dict):
+        Type.__init__(self, entity, types_dict)
+        self.entity = entity
+
+    mutations = []
     
+    def mutation(f, mutations=mutations):
+        mutations.append(f.__name__)
+        return f
+        
+        
+    # m = mutation(input, output)
 
-
-class SetField(object):
-    '''
-    Queryset for an entity
-    '''
-
-    def __init__(self, entity, types_dict):
-        self.entity = entity
-        self.types_dict = types_dict
-
-    def as_graphql(self):
-        entity_type = EntityType(self.entity, self.types_dict).as_graphql()
-        list_type = GraphQLList(entity_type)
-        return GraphQLField(list_type, resolver=self)
-
-
-class EntityType(object):
-
-    def __init__(self, entity, types_dict):
-        self.entity = entity
-        self.types_dict = types_dict
-
-    def get_fields(self):
-        result = {}
+    def get_field_types(self):
         for attr in self.entity._attrs_:
-            FieldType = AttrField.dispatch(attr.py_type)
-            field = FieldType(attr, self.types_dict)
-            result[attr.name] = field.as_graphql()
-        return result
+            FieldType = self.dispatch_attr(attr)
+            field_type = FieldType.from_attr(attr, self.types_dict)
+            yield attr.name, field_type
+    
+    @mutation
+    def create(self, **kwargs):
+        obj = self.entity(**kwargs)
+        flush()
+        return obj
+        
+    @mutation
+    def update(self, get_kwargs, **kwargs):
+        obj = self.entity._find_one_(**get_kwargs)
+        obj.__dict__.update(kwargs)
+        flush()
+        return obj
 
     @property
     def name(self):
@@ -79,50 +114,69 @@ class EntityType(object):
     def as_graphql(self):
         if self.name in self.types_dict:
             return self.types_dict[self.name]
-        
+        def get_fields():
+            return {
+                name: typ.make_field()
+                for name, typ in self.get_field_types()
+            }
         object_type = GraphQLObjectType(
             name=self.name,
-            fields=self.get_fields,
+            fields=get_fields,
             )
         self.types_dict[self.name] = object_type
         return object_type
+    
+    del mutation
+
+
+class EntitySetType(EntityType):
+
+    def make_field(self, resolver=None):
+        typ = self.as_graphql()
+        return GraphQLField(typ, resolver=self)
+
+    def as_graphql(self):
+        entity_type = EntityType.as_graphql(self)
+        return GraphQLList(entity_type)
         
-        
-
-@AttrField.register(core.Entity)
-class AttrSetField(SetField, AttrField):
-    
-    def __init__(self, attr, types_dict):
-        AttrField.__init__(self, attr, types_dict)
-        entity = attr.py_type
-        SetField.__init__(self, entity, types_dict)
-    
     def __call__(self, obj, args, info):
-        name = self.attr.name
-        return list(getattr(obj, name))
-    
-
-class RootEntitySetField(SetField):
-
-    def __call__(self, obj, args, info):
+        if hasattr(self, 'attr'):
+            # TODO attr -> _attr_ or isinstance(self, Attr)
+            value = getattr(obj, self.attr.name)
+            return list(value)
         return select(o for o in self.entity)[:]
-
-
-@AttrField.register(int)
-class IntType(AttrField):
-    
-    def as_graphql(self):
-        return GraphQLField(GraphQLInt)
-
-
-@AttrField.register(str)
-class StrType(AttrField):
-    
-    def as_graphql(self):
-        return GraphQLField(GraphQLString)
         
+        
+
+@Type.register(int)
+class IntType(Type):
+    
+    def as_graphql(self):
+        return GraphQLInt
+
+
+@Type.register(str)
+class StrType(Type):
+    
+    def as_graphql(self):
+        return GraphQLString
+
         
 
 class ConnectionField(object):
     1
 
+
+class MutationField(object):
+    '''
+    create update delete
+    '''
+    
+    def __init__(self, entity):
+        1
+        
+        
+class CreateUpdateEntityInput(object):
+
+    def as_graphql(self):
+        1

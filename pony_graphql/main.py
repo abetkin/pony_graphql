@@ -9,7 +9,7 @@ from graphql.core.type import GraphQLID, GraphQLInputObjectType, \
     
 from graphql.core.type.schema import GraphQLSchema
 
-from _types import RootEntitySetField
+from _types import EntitySetType
 
 
 
@@ -51,12 +51,13 @@ from _types import RootEntitySetField
 
 def generate_schema(db):  
     _types = {}
-    fields = {
-        name: RootEntitySetField(entity, _types).as_graphql()
-        for name, entity in db.entities.items()
-    }
+    def fields():
+        for name, entity in db.entities.items():
+            typ = EntitySetType(entity, _types)
+            yield name, typ.make_field()
+        
 
-    query = GraphQLObjectType(name='Query', fields=fields)
+    query = GraphQLObjectType(name='Query', fields=dict(fields()))
 
     return GraphQLSchema(query=query)
 
