@@ -12,6 +12,8 @@ import ipdb, IPython
 
 from singledispatch import singledispatch
 
+from relay import RelayMutationType
+
 # TODO metaclass instead of decorator ?
 
 class Type(object):
@@ -72,6 +74,10 @@ class CustomType(Type):
 
 # TODO tell executor about db_session
 
+
+
+
+
 @Type.register(core.Entity)
 class EntityType(Type):
 
@@ -81,10 +87,22 @@ class EntityType(Type):
 
     mutations = []
     
-    def mutation(f, mutations=mutations):
-        mutations.append(f.__name__)
+    def mutation(f, _mutations=mutations):
+        _mutations.append(f.__name__)
         return f
-        
+    
+    def make_mutation(self, name, input_fields=None, output_fields=None):
+        '%sInput' % name
+        {
+            key: GraphQLArgument(typ)
+            for key, typ in self.get_field_types()
+        }
+        '%sPayload' % name
+        def resolve():
+            1
+        {
+            'instance': self.as_graphql.make_field(resolve)
+        }
         
     # m = mutation(input, output)
 
@@ -176,7 +194,13 @@ class MutationField(object):
         1
         
         
-class CreateUpdateEntityInput(object):
+class CreateUpdateEntityInput(Type):
+
+    def get_input_fields(self):
+        raise NotImplementedError
+
+    def get_output_fields(self):
+        raise NotImplementedError
 
     def as_graphql(self):
-        1
+        RelayMutationType.build()
