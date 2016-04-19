@@ -33,8 +33,7 @@ class RelayMutationType(object):
     output_fields_getter = lambda *args: {}
     mutate_func = not_implemented
     
-    def __init__(self, mutate=None, name=None,
-                 get_input_fields=None, get_output_fields=None,
+    def __init__(self, mutate=None, get_input_fields=None, get_output_fields=None,
                  **kwargs):
         if mutate is not None:
             self.mutate_func = mutate
@@ -42,8 +41,6 @@ class RelayMutationType(object):
             self.input_fields_getter = get_input_fields
         if get_output_fields is not None:
             self.output_fields_getter = get_output_fields
-        if name is not None:
-            self.name = name
         self.__dict__.update(kwargs)
 
     @property
@@ -72,6 +69,8 @@ class RelayMutationType(object):
         return result
 
     def make_field(self):
+        # if isinstance(self, UpdateEntityMutation):
+        #     ipdb.set_trace()
         output_fields = self.get_output_fields()
         output_fields.update({
             'clientMutationId': GraphQLField(GraphQLNonNull(GraphQLString))
@@ -126,8 +125,6 @@ class EntityMutation(RelayMutationType):
         return result
 
     def get_input_fields(self):
-        if self.input_fields_getter:
-            return self.input_fields_getter()
         GetEntity = GraphQLInputObjectType(
             name=self.name + 'Get',
             fields=self._get_entity_inputs())
@@ -136,9 +133,6 @@ class EntityMutation(RelayMutationType):
         }
 
     def get_output_fields(self):
-        if self.output_fields_getter:
-            return self.output_fields_getter()
-        print('et', self.entity_type)
         return {
             'instance': self.entity_type.make_field(),
         }

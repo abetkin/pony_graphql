@@ -168,6 +168,7 @@ class EntityType(Type):
             mut = kw['type'].from_entity_type(self, **kw)
             mutation_name = ''.join((name, self.name))
             fields[mutation_name] = mut.make_field()
+            print ('f', mutation_name, mut.mutate)
         return fields
     
     def as_input(self):
