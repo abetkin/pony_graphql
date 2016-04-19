@@ -132,7 +132,7 @@ class EntityType(Type):
         obj = self.entity._find_one_(get)
         obj.delete()
         flush()
-        return {'ok': True}
+        return True
 
     @property
     def name(self):
@@ -153,15 +153,19 @@ class EntityType(Type):
         self.types_dict[self.name] = object_type
         return object_type
     
+    def from_e(self):
+        1
+        type = 'DeclaredMutation'
+    
     def make_mutations(self):
         fields = {}
         for name, conf in self.mutation.registry.items():
             kw = dict(conf)
-            name = conf['name']
+            name = kw['name']
             kw['name'] = ''.join((name[0].upper(), name[1:]))
             kw['name'] = ''.join((conf['name'], self.name))
             kw['mutate'] = getattr(self, name)
-            mut = conf['type'].from_entity_type(self, **kw)
+            mut = kw['type'].from_entity_type(self, **kw)
             mutation_name = ''.join((name, self.name))
             fields[mutation_name] = mut.make_field()
         return fields
