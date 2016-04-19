@@ -29,9 +29,9 @@ class dict_as_obj(object):
 
 class RelayMutationType(object):
 
-    input_fields_getter = None
-    output_fields_getter = None
-    mutate_func = None
+    input_fields_getter = lambda *args: {}
+    output_fields_getter = lambda *args: {}
+    mutate_func = not_implemented
     
     def __init__(self, mutate=None, name=None,
                  get_input_fields=None, get_output_fields=None,
@@ -48,26 +48,20 @@ class RelayMutationType(object):
 
     @property
     def get_input_fields(self):
-        if self.input_fields_getter:
-            return self.input_fields_getter
-        return not_implemented
+        return self.input_fields_getter
         
     @property
     def get_output_fields(self):
-        if self.output_fields_getter:
-            return self.output_fields_getter
-        return not_implemented
+        return self.output_fields_getter
 
     @property
     def mutate(self):
-        if self.mutate_func is not None:
-            return self.mutate_func
-        return not_implemented
+        return self.mutate_func
 
     def __call__(self, obj, args, info):
         params = args.get('input')
         clientMutationId = params.pop('clientMutationId')
-        result = self.mutate_func(**params)
+        result = self.mutate(**params)
         result = self.transform_result(result)
         result.clientMutationId = clientMutationId
         return result
@@ -100,6 +94,16 @@ class RelayMutationType(object):
             },
             resolver=self
         )
+
+class BooleanResultMutation(RelayMutationType):
+    def get_output_fields(self):
+        return {
+            'ok': GraphQLField(GraphQLBoolean)
+        }
+    
+    def transform_result(self, result):
+        result = {'ok': bool(result)}
+        return RelayMutationType.transform_result(self, result)
 
 
 class EntityMutation(RelayMutationType):
@@ -156,9 +160,7 @@ class CreateEntityMutation(EntityMutation):
         return self._get_entity_inputs()
 
 
-class DeleteEntityMutation(EntityMutation):
+class DeleteEntityMutation(BooleanResultMutation, EntityMutation):
+    pass
 
-    def get_output_fields(self):
-        return {
-            'ok': GraphQLField(GraphQLBoolean)
-        }
+
