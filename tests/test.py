@@ -66,8 +66,21 @@ class Test(unittest.TestCase):
             print(result.data)
             self.assertFalse(result.errors)
     
-    def test_query(self):
-        1
+    def test_mutate(self):
+        schema = generate_schema(self.db)
+        ast = parse('''
+        mutation {
+            createArtist(input: {age: 26}) {
+                instance {
+                    age
+                }
+            }
+        }
+        ''')
+        with orm.db_session:
+            result = execute(schema, None, ast)
+            print(result.data)
+            self.assertFalse(result.errors)
     
     def inter(self):
         import IPython

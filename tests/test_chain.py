@@ -13,7 +13,7 @@ import pony
 
 import os, sys
 
-from pony_graphql import generate
+from pony_graphql import generate_schema
 
 #
 # genre -> artist -> piece -> title

@@ -16,12 +16,8 @@ Artists(filter: {date__gt: date}) {
 
 mutation {
 
-    create(input: {type: "Artist", })
-        Artist {
-            name: "Sia Furler",
-            age: 41
-            genres:[{}
-        }
-    }
+    createArtist(input: {name: "Sia Furler", age: 41, genres:['pop']})
 
 }
+
+

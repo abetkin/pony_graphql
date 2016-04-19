@@ -9,55 +9,23 @@ from graphql.core.type import GraphQLID, GraphQLInputObjectType, \
     
 from graphql.core.type.schema import GraphQLSchema
 
-from _types import EntitySetType
-
-
-
-
-
-
-# class AddPostMutation(RelayMutation):
-#     name = 'AddPost'
-
-#     def get_input_fields(self):
-#         return {
-#             'parent_id': GraphQLInputObjectField(GraphQLInt),
-#             'title': GraphQLInputObjectField(GraphQLString),
-#             'text': GraphQLInputObjectField(GraphQLString),
-#             'tags': GraphQLInputObjectField(GraphQLList(GraphQLString)),
-#         }
-
-
-#     def get_output_fields(self):
-#         return {
-#             'post': GraphQLField(PostType),
-#         }
-
-#     def mutate(self, **params):
-#         params['parent'] = params.pop('parent_id')
-#         return asobj({'post': create_post(**params)})
-
-
-# MutationType = GraphQLObjectType('Mutation', {
-#     'addPost': AddPostMutation.build()
-
-# })
-
-
-
-
-
+from _types import EntityType, EntitySetType
 
 
 def generate_schema(db):  
     _types = {}
-    def fields():
-        for name, entity in db.entities.items():
-            typ = EntitySetType(entity, _types)
-            yield name, typ.make_field()
-        
+    fields = {}
+    mutations = {}
+    for name, entity in db.entities.items():
+        typ = EntitySetType(entity, _types)
+        fields[name] = typ.make_field()
+    
+    for name, entity in db.entities.items():
+        typ = EntityType(entity, _types)
+        mutations.update(typ.make_mutations())
 
-    query = GraphQLObjectType(name='Query', fields=dict(fields()))
+    query = GraphQLObjectType(name='Query', fields=fields)
+    mutation = GraphQLObjectType('Mutation', fields=mutations)
 
-    return GraphQLSchema(query=query)
+    return GraphQLSchema(query=query, mutation=mutation)
 

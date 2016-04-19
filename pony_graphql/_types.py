@@ -3,8 +3,8 @@ from pony.orm import *
 from pony.orm import core
 
 from graphql.core.type.definition import GraphQLArgument, GraphQLField, GraphQLNonNull, \
-    GraphQLObjectType, GraphQLList
-from graphql.core.type.scalars import GraphQLString, GraphQLInt
+    GraphQLObjectType, GraphQLList, GraphQLInputObjectType, GraphQLInputObjectField, GraphQLInputObjectField
+from graphql.core.type.scalars import GraphQLString, GraphQLInt, GraphQLBoolean
 from graphql.core.type.schema import GraphQLSchema
 
 
@@ -12,24 +12,26 @@ import ipdb, IPython
 
 from singledispatch import singledispatch
 
-from relay import RelayMutationType
+from mutations import CreateEntityMutation, UpdateEntityMutation, DeleteEntityMutation
 
 # TODO metaclass instead of decorator ?
 
 class Type(object):
 
-    def __init__(self, py_type, types_dict):
-        self.py_type = py_type
+    def __init__(self,  types_dict):
         self.types_dict = types_dict
     
     @classmethod
     def from_attr(cls, attr, types_dict):
-        instance = cls(attr.py_type, types_dict)
+        instance = cls(types_dict)
         instance.attr = attr
         return instance
         
     def as_graphql(self):
         raise NotImplementedError
+        
+    def as_input(self):
+        return self.as_graphql()
 
     def make_field(self, resolver=None):
         return GraphQLField(self.as_graphql())
@@ -82,29 +84,23 @@ class CustomType(Type):
 class EntityType(Type):
 
     def __init__(self, entity, types_dict):
-        Type.__init__(self, entity, types_dict)
+        Type.__init__(self, types_dict)
         self.entity = entity
 
-    mutations = []
+
+    @classmethod
+    def from_attr(cls, attr, types_dict):
+        instance = cls(attr.py_type, types_dict)
+        instance.attr = attr
+        return instance
     
-    def mutation(f, _mutations=mutations):
-        _mutations.append(f.__name__)
-        return f
+    class mutation(dict):
+        registry = {}
     
-    def make_mutation(self, name, input_fields=None, output_fields=None):
-        '%sInput' % name
-        {
-            key: GraphQLArgument(typ)
-            for key, typ in self.get_field_types()
-        }
-        '%sPayload' % name
-        def resolve():
-            1
-        {
-            'instance': self.as_graphql.make_field(resolve)
-        }
-        
-    # m = mutation(input, output)
+        def __call__(self, f):
+            name = self.setdefault('name', f.__name__)
+            self.registry[name] = self
+            return f 
 
     def get_field_types(self):
         for attr in self.entity._attrs_:
@@ -112,18 +108,31 @@ class EntityType(Type):
             field_type = FieldType.from_attr(attr, self.types_dict)
             yield attr.name, field_type
     
-    @mutation
+    #
+    # Defining `mutate` function in the mutation type
+    # will have the same effect as decorating one.
+    #
+    
+    @mutation(type=CreateEntityMutation)
     def create(self, **kwargs):
         obj = self.entity(**kwargs)
         flush()
         return obj
         
-    @mutation
-    def update(self, get_kwargs, **kwargs):
-        obj = self.entity._find_one_(**get_kwargs)
-        obj.__dict__.update(kwargs)
+    @mutation(type=UpdateEntityMutation)
+    def update(self, get, **kwargs):
+        obj = self.entity._find_one_(get)
+        for key, val in kwargs.items():
+            setattr(obj, key, val)
         flush()
         return obj
+    
+    @mutation(type=DeleteEntityMutation)
+    def delete(self, get):
+        obj = self.entity._find_one_(get)
+        obj.delete()
+        flush()
+        return {'ok': True}
 
     @property
     def name(self):
@@ -144,7 +153,23 @@ class EntityType(Type):
         self.types_dict[self.name] = object_type
         return object_type
     
-    del mutation
+    def make_mutations(self):
+        fields = {}
+        for name, conf in self.mutation.registry.items():
+            kw = dict(conf)
+            name = conf['name']
+            kw['name'] = ''.join((name[0].upper(), name[1:]))
+            kw['name'] = ''.join((conf['name'], self.name))
+            kw['mutate'] = getattr(self, name)
+            mut = conf['type'].from_entity_type(self, **kw)
+            mutation_name = ''.join((name, self.name))
+            fields[mutation_name] = mut.make_field()
+        return fields
+    
+    def as_input(self):
+        PkType = Type.dispatch(self.entity._pk_.py_type)
+        typ = PkType(self.types_dict)
+        return typ.as_input()
 
 
 class EntitySetType(EntityType):
@@ -152,6 +177,10 @@ class EntitySetType(EntityType):
     def make_field(self, resolver=None):
         typ = self.as_graphql()
         return GraphQLField(typ, resolver=self)
+
+    def as_input(self):
+        entity_input = EntityType.as_input(self)
+        return GraphQLList(entity_input)
 
     def as_graphql(self):
         entity_type = EntityType.as_graphql(self)
@@ -179,28 +208,15 @@ class StrType(Type):
     def as_graphql(self):
         return GraphQLString
 
+@Type.register(bool)
+class BooleanType(Type):
+    
+    def as_graphql(self):
+        return GraphQLBoolean
         
 
 class ConnectionField(object):
     1
 
 
-class MutationField(object):
-    '''
-    create update delete
-    '''
-    
-    def __init__(self, entity):
-        1
-        
-        
-class CreateUpdateEntityInput(Type):
 
-    def get_input_fields(self):
-        raise NotImplementedError
-
-    def get_output_fields(self):
-        raise NotImplementedError
-
-    def as_graphql(self):
-        RelayMutationType.build()
