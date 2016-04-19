@@ -116,8 +116,16 @@ class RelayMutationType(object):
             resolver=self
         )
 
+class PonyMutation(RelayMutationType):
 
-class BooleanResultMutation(RelayMutationType):
+    def mutate(self, **kwargs):
+        ret = self.mutate_func(**kwargs)
+        orm.flush()
+        return ret
+        
+
+
+class BooleanResultMutation(PonyMutation):
     def get_output_fields(self):
         return {
             'ok': GraphQLField(GraphQLBoolean)
@@ -128,7 +136,7 @@ class BooleanResultMutation(RelayMutationType):
         return RelayMutationType.transform_result(self, result)
 
 
-class EntityMutation(RelayMutationType):
+class EntityMutation(PonyMutation):
 
     @classmethod
     def from_entity_type(cls, entity_type, **kwargs):
@@ -181,8 +189,8 @@ class EntityMutation(RelayMutationType):
 
 
 class CreateEntityMutation(EntityMutation):
-    # turn the function wrapping of
-    mutate = RelayMutationType.mutate
+
+    mutate = PonyMutation.mutate
     
     def get_input_fields(self):
         return self._get_entity_inputs()

@@ -104,9 +104,7 @@ class EntityType(Type):
     
     @CreateEntityMutation.mark
     def create(self, **kwargs):
-        obj = self.entity(**kwargs)
-        flush()
-        return obj
+        return self.entity(**kwargs)
         
     @EntityMutation.mark
     def update(self, obj, **kwargs):
@@ -182,7 +180,7 @@ class EntitySetType(EntityType):
     def as_graphql(self):
         entity_type = EntityType.as_graphql(self)
         return GraphQLList(entity_type)
-        
+    
     def __call__(self, obj, args, info):
         if hasattr(self, 'attr'):
             # TODO attr -> _attr_ or isinstance(self, Attr)
