@@ -12,7 +12,9 @@ import ipdb, IPython
 
 from singledispatch import singledispatch
 
-from mutations import CreateEntityMutation, UpdateEntityMutation, DeleteEntityMutation
+from mutations import EntityMutation, CreateEntityMutation, DeleteEntityMutation
+
+
 
 # TODO metaclass instead of decorator ?
 
@@ -94,44 +96,26 @@ class EntityType(Type):
         instance.attr = attr
         return instance
     
-    class mutation(dict):
-        registry = {}
-    
-        def __call__(self, f):
-            name = self.setdefault('name', f.__name__)
-            self.registry[name] = self
-            return f 
-
     def get_field_types(self):
         for attr in self.entity._attrs_:
             FieldType = self.dispatch_attr(attr)
             field_type = FieldType.from_attr(attr, self.types_dict)
             yield attr.name, field_type
     
-    #
-    # Defining `mutate` function in the mutation type
-    # will have the same effect as decorating one.
-    #
-    
-    @mutation(type=CreateEntityMutation)
+    @CreateEntityMutation.mark
     def create(self, **kwargs):
         obj = self.entity(**kwargs)
         flush()
         return obj
         
-    @mutation(type=UpdateEntityMutation)
-    def update(self, get, **kwargs):
-        obj = self.entity._find_one_(get)
+    @EntityMutation.mark
+    def update(self, obj, **kwargs):
         for key, val in kwargs.items():
             setattr(obj, key, val)
-        flush()
-        return obj
     
-    @mutation(type=DeleteEntityMutation)
-    def delete(self, get):
-        obj = self.entity._find_one_(get)
+    @DeleteEntityMutation.mark
+    def delete(self, obj):
         obj.delete()
-        flush()
         return True
 
     @property
@@ -153,22 +137,30 @@ class EntityType(Type):
         self.types_dict[self.name] = object_type
         return object_type
     
-    def from_e(self):
-        1
-        type = 'DeclaredMutation'
+        
+    def _collect_mutations(self):
+        is_mutation = lambda value: hasattr(value, 'mutation') and callable(value)
+        for name, val in self.__class__.__dict__.items():
+            if is_mutation(val):
+                config = dict(val.mutation)
+                config['mutate'] = getattr(self, name)
+                yield config
+        for name, val in self.entity.__dict__.items():
+            if is_mutation(val):
+                config = dict(val.mutation)
+                config['mutate'] = getattr(self.entity, name)
+                yield config     
     
     def make_mutations(self):
         fields = {}
-        for name, conf in self.mutation.registry.items():
-            kw = dict(conf)
+        for config in self._collect_mutations():
+            kw = dict(config)
             name = kw['name']
             kw['name'] = ''.join((name[0].upper(), name[1:]))
-            kw['name'] = ''.join((conf['name'], self.name))
-            kw['mutate'] = getattr(self, name)
+            kw['name'] = ''.join((kw['name'], self.name))
             mut = kw['type'].from_entity_type(self, **kw)
             mutation_name = ''.join((name, self.name))
             fields[mutation_name] = mut.make_field()
-            print ('f', mutation_name, mut.mutate)
         return fields
     
     def as_input(self):

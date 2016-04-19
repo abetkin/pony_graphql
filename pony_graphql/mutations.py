@@ -1,3 +1,4 @@
+from functools import wraps
 from graphql.core.type import (
     GraphQLArgument,
     GraphQLNonNull,
@@ -13,6 +14,8 @@ from graphql.core.type import (
 
 import ipdb
 
+from pony import orm
+
 def not_implemented(*args, **kw):
     raise NotImplementedError
 
@@ -27,11 +30,32 @@ class dict_as_obj(object):
 
 
 
+class MutationMarker(object):
+    
+    class decorator(dict):
+        def __call__(self, func=None, **kwargs):
+            if func is None:
+                self.update(kwargs)
+                return self
+            self.setdefault('name', func.__name__)
+            func.mutation = self
+            return func 
+    
+    def __init__(self, decorator=None):
+        if decorator:
+            self.decorator = decorator
+    
+    def __get__(self, instance, owner):
+        return self.decorator(type=owner)
+
+
 class RelayMutationType(object):
 
     input_fields_getter = lambda *args: {}
     output_fields_getter = lambda *args: {}
     mutate_func = not_implemented
+    
+    mark = MutationMarker()
     
     def __init__(self, mutate=None, get_input_fields=None, get_output_fields=None,
                  **kwargs):
@@ -69,8 +93,6 @@ class RelayMutationType(object):
         return result
 
     def make_field(self):
-        # if isinstance(self, UpdateEntityMutation):
-        #     ipdb.set_trace()
         output_fields = self.get_output_fields()
         output_fields.update({
             'clientMutationId': GraphQLField(GraphQLNonNull(GraphQLString))
@@ -94,6 +116,7 @@ class RelayMutationType(object):
             resolver=self
         )
 
+
 class BooleanResultMutation(RelayMutationType):
     def get_output_fields(self):
         return {
@@ -113,6 +136,19 @@ class EntityMutation(RelayMutationType):
         mut.entity_type = entity_type
         return mut
 
+    @property
+    def mutate(self):
+        entity = self.entity_type.entity
+        
+        @wraps(self.mutate_func)
+        def wrapper(get, **kwargs):
+            obj = entity._find_one_(get)
+            self.mutate_func(obj, **kwargs)
+            orm.flush()
+            return obj
+        
+        return wrapper
+
     def transform_result(self, result):
         if isinstance(result, self.entity_type.entity):
             result = {'instance': result}
@@ -125,12 +161,14 @@ class EntityMutation(RelayMutationType):
         return result
 
     def get_input_fields(self):
+        inputs = self._get_entity_inputs()
         GetEntity = GraphQLInputObjectType(
             name=self.name + 'Get',
             fields=self._get_entity_inputs())
-        return {
+        inputs.update({
             'get': GraphQLInputObjectField(GetEntity),
-        }
+        })
+        return inputs
 
     def get_output_fields(self):
         return {
@@ -138,17 +176,13 @@ class EntityMutation(RelayMutationType):
         }
 
 
-class UpdateEntityMutation(EntityMutation):
-
-    def get_input_fields(self):
-        fields = EntityMutation.get_input_fields(self)
-        fields.update(
-            self._get_entity_inputs()
-        )
-        return fields
+# class UpdateEntityMutation(EntityMutation):
+#     pass
 
 
 class CreateEntityMutation(EntityMutation):
+    # turn the function wrapping of
+    mutate = RelayMutationType.mutate
     
     def get_input_fields(self):
         return self._get_entity_inputs()
@@ -158,3 +192,15 @@ class DeleteEntityMutation(BooleanResultMutation, EntityMutation):
     pass
 
 
+class DbMutation(BooleanResultMutation):
+    def __init__(self, db):
+        self.db = db
+
+    def mutate(self):
+        raise NotImplementedError
+
+    def register(self):
+        mutations = self.db.__dict__.setdefault('mutations', {})
+        mutations.update({
+            self.name: self.make_field()
+        })

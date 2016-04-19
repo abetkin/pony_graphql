@@ -4,6 +4,7 @@ import os, sys
 import pony
 from pony import orm
 from pony_graphql import generate_schema
+from pony_graphql.mutations import EntityMutation, DbMutation
 
 db_name = 'flask.db'
 
@@ -25,6 +26,10 @@ class Artist(db.Entity):
     name = orm.Required(str)
     age = orm.Optional(int)
     genres = orm.Set(Genre)
+    
+    @EntityMutation.mark
+    def changeAge(self, age):
+        self.age = age
 
 
 db.generate_mapping(check_tables=True, create_tables=True)
@@ -35,5 +40,15 @@ with orm.db_session:
 
 pony.options.INNER_JOIN_SYNTAX = True
 
+class InitAppMutation(DbMutation):
+    name = 'initApp'
+
+    def mutate(self):
+        db = self.db
+        rock = db.Genre(name='rock')
+        a = db.Artist(name='Samoilov', age=45, genres=[rock])
+        return True
+        
+InitAppMutation(db).register()
 
 schema = generate_schema(db)
