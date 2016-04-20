@@ -8,7 +8,7 @@ from pony_graphql.mutations import EntityMutation, DbMutation
 
 db_name = 'flask.db'
 
-
+from graphql.core.type import GraphQLInputObjectField, GraphQLInt
 
 db_path = os.path.dirname(__file__)
 db_path = os.path.join(db_path, db_name)
@@ -28,8 +28,20 @@ class Artist(db.Entity):
     genres = orm.Set(Genre)
     
     @EntityMutation.mark
-    def changeAge(self, age):
-        self.age = age
+    def customMutation(self):
+        'Takes no args'
+        
+    class changeAge(EntityMutation):
+    
+        def get_input_fields(self):
+            ret = EntityMutation.get_input_fields(self)
+            ret.update({
+                'age': GraphQLInputObjectField(GraphQLInt)
+            })
+            return ret
+            
+        def mutate_func(self, obj, age):
+            obj.age = age
 
 
 db.generate_mapping(check_tables=True, create_tables=True)

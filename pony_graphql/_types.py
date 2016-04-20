@@ -8,11 +8,12 @@ from graphql.core.type.scalars import GraphQLString, GraphQLInt, GraphQLBoolean
 from graphql.core.type.schema import GraphQLSchema
 
 
-import ipdb, IPython
+import inspect
 
 from singledispatch import singledispatch
 
-from mutations import EntityMutation, CreateEntityMutation, DeleteEntityMutation
+from mutations import EntityMutation, CreateEntityMutation, DeleteEntityMutation, \
+        UpdateEntityMutation
 
 
 
@@ -106,7 +107,7 @@ class EntityType(Type):
     def create(self, **kwargs):
         return self.entity(**kwargs)
         
-    @EntityMutation.mark
+    @UpdateEntityMutation.mark
     def update(self, obj, **kwargs):
         for key, val in kwargs.items():
             setattr(obj, key, val)
@@ -141,12 +142,16 @@ class EntityType(Type):
         for name, val in self.__class__.__dict__.items():
             if is_mutation(val):
                 config = dict(val.mutation)
-                config['mutate'] = getattr(self, name)
+                mutate = getattr(self, name)
+                if inspect.ismethod(mutate):
+                    config['mutate'] = mutate
                 yield config
         for name, val in self.entity.__dict__.items():
             if is_mutation(val):
                 config = dict(val.mutation)
-                config['mutate'] = getattr(self.entity, name)
+                mutate = getattr(self.entity, name)
+                if inspect.ismethod(mutate):
+                    config['mutate'] = mutate
                 yield config     
     
     def make_mutations(self):

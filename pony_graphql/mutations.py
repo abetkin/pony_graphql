@@ -36,8 +36,11 @@ class MutationMarker(object):
         def __call__(self, func=None, **kwargs):
             if func is None:
                 self.update(kwargs)
+                if 'name' in kwargs:
+                    self['__named__'] = True
                 return self
-            self.setdefault('name', func.__name__)
+            if not self.get('__named__'):
+                self['name'] = func.__name__
             func.mutation = self
             return func 
     
@@ -46,7 +49,18 @@ class MutationMarker(object):
             self.decorator = decorator
     
     def __get__(self, instance, owner):
-        return self.decorator(type=owner)
+        return self.decorator({
+            'type': owner,
+            'name': owner.__name__,
+        })
+
+
+class ClassAttrRef(object):
+    def __init__(self, attr_name):
+        self.attr_name = attr_name
+    
+    def __get__(self, isinstance, owner):
+        return getattr(owner, self.attr_name)
 
 
 class RelayMutationType(object):
@@ -56,6 +70,10 @@ class RelayMutationType(object):
     mutate_func = not_implemented
     
     mark = MutationMarker()
+    
+    #
+    #
+    mutation = ClassAttrRef('mark')
     
     def __init__(self, mutate=None, get_input_fields=None, get_output_fields=None,
                  **kwargs):
@@ -81,10 +99,11 @@ class RelayMutationType(object):
 
     def __call__(self, obj, args, info):
         params = args.get('input')
-        clientMutationId = params.pop('clientMutationId')
+        clientMutationId = params.pop('clientMutationId', None)
         result = self.mutate(**params)
         result = self.transform_result(result)
-        result.clientMutationId = clientMutationId
+        if clientMutationId is not None:
+            result.clientMutationId = clientMutationId
         return result
         
     def transform_result(self, result):
@@ -95,15 +114,14 @@ class RelayMutationType(object):
     def make_field(self):
         output_fields = self.get_output_fields()
         output_fields.update({
-            'clientMutationId': GraphQLField(GraphQLNonNull(GraphQLString))
+            'clientMutationId': GraphQLField(GraphQLString)
         })
         output_type = GraphQLObjectType(
             self.name + 'Payload',
             fields=output_fields)
         input_fields = self.get_input_fields()
         input_fields.update({
-            'clientMutationId':
-                GraphQLInputObjectField(GraphQLNonNull(GraphQLString))
+            'clientMutationId': GraphQLInputObjectField(GraphQLString)
         })
         input_arg = GraphQLArgument(GraphQLNonNull(GraphQLInputObjectType(
             name=self.name + 'Input',
@@ -169,14 +187,12 @@ class EntityMutation(PonyMutation):
         return result
 
     def get_input_fields(self):
-        inputs = self._get_entity_inputs()
         GetEntity = GraphQLInputObjectType(
             name=self.name + 'Get',
             fields=self._get_entity_inputs())
-        inputs.update({
+        return {
             'get': GraphQLInputObjectField(GetEntity),
-        })
-        return inputs
+        }
 
     def get_output_fields(self):
         return {
@@ -184,8 +200,14 @@ class EntityMutation(PonyMutation):
         }
 
 
-# class UpdateEntityMutation(EntityMutation):
-#     pass
+class UpdateEntityMutation(EntityMutation):
+
+    def get_input_fields(self):
+        inputs = EntityMutation.get_input_fields(self)
+        inputs.update(
+            self._get_entity_inputs()
+        )
+        return inputs
 
 
 class CreateEntityMutation(EntityMutation):
