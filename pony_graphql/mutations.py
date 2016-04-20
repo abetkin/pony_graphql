@@ -12,8 +12,6 @@ from graphql.core.type import (
     GraphQLInputObjectType,
 )
 
-import ipdb
-
 from pony import orm
 
 def not_implemented(*args, **kw):

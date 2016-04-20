@@ -34,7 +34,6 @@ Genre (id: 1) {
 
 
 import unittest
-import ipdb, IPython
 
 # class TestPony(unittest.TestCase):
 
