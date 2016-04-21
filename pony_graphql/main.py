@@ -9,7 +9,7 @@ from graphql.core.type import GraphQLID, GraphQLInputObjectType, \
     
 from graphql.core.type.schema import GraphQLSchema
 
-from _types import EntityType, EntitySetType
+from _types import EntityType, EntitySetType, EntityConnectionType
 
 
 def generate_schema(db):  
@@ -19,7 +19,11 @@ def generate_schema(db):
     for name, entity in db.entities.items():
         typ = EntitySetType(entity, _types)
         fields[name] = typ.make_field()
-    
+
+    for name, entity in db.entities.items():
+        typ = EntityConnectionType(entity, _types)
+        fields['%sConnection' % typ.name] = typ.make_field()
+
     for name, entity in db.entities.items():
         typ = EntityType(entity, _types)
         mutations.update(typ.make_mutations())

@@ -9,13 +9,15 @@ from graphql.core.type.schema import GraphQLSchema
 
 
 import inspect
+from collections import namedtuple, OrderedDict
+import json
 
 from singledispatch import singledispatch
 
 from mutations import EntityMutation, CreateEntityMutation, DeleteEntityMutation, \
         UpdateEntityMutation
 
-
+from .util import ClassAttr, as_object
 
 # TODO metaclass instead of decorator ?
 
@@ -23,6 +25,8 @@ class Type(object):
 
     def __init__(self,  types_dict):
         self.types_dict = types_dict
+        
+    name = ClassAttr('__name__')
     
     @classmethod
     def from_attr(cls, attr, types_dict):
@@ -47,6 +51,7 @@ class Type(object):
 
     def dispatch_attr(cls, attr):
         if isinstance(attr, Set):
+            # TODO connection!
             return EntitySetType
         return cls.dispatch(attr.py_type)
 
@@ -102,6 +107,7 @@ class EntityType(Type):
             FieldType = self.dispatch_attr(attr)
             field_type = FieldType.from_attr(attr, self.types_dict)
             yield attr.name, field_type
+            # TODO merge into dispatch_attr
     
     @CreateEntityMutation.mark
     def create(self, **kwargs):
@@ -177,13 +183,21 @@ class EntityType(Type):
         PkType = Type.dispatch(self.entity._pk_.py_type)
         typ = PkType(self.types_dict)
         return typ.as_input()
-
+     
+    # TODO maybe rename as_graphql 
+     
 
 class EntitySetType(EntityType):
 
+    @property
+    def order_by(self):
+        return self.entity._pk_
+
+    arguments = {}
+
     def make_field(self, resolver=None):
         typ = self.as_graphql()
-        return GraphQLField(typ, resolver=self)
+        return GraphQLField(typ, args=self.arguments, resolver=self)
 
     def as_input(self):
         entity_input = EntityType.as_input(self)
@@ -193,14 +207,152 @@ class EntitySetType(EntityType):
         entity_type = EntityType.as_graphql(self)
         return GraphQLList(entity_type)
     
-    def __call__(self, obj, args, info):
+    def get_query(self, **kwargs):
         if hasattr(self, 'attr'):
             # TODO attr -> _attr_ or isinstance(self, Attr)
-            value = getattr(obj, self.attr.name)
-            return list(value)
-        return select(o for o in self.entity)[:]
+            query = getattr(obj, self.attr.name).select()
+        else:
+            query = select(o for o in self.entity)
+        return query.order_by(self.order_by)
+    
+    def __call__(self, obj, kwargs, info):
+        query = self.get_query(**kwargs)
+        return list(query)
         
-        
+
+
+class PageInfoType(Type):
+
+    def as_graphql(self):
+        if self.name in self.types_dict:
+            return self.types_dict[self.name]
+        typ = GraphQLObjectType(self.name, {
+            'hasNextPage': GraphQLField(
+                GraphQLNonNull(GraphQLBoolean),
+            ),
+            'hasPreviousPage': GraphQLField(
+                GraphQLNonNull(GraphQLBoolean),
+            ),
+            'startCursor': GraphQLField(
+                GraphQLString,
+            ),
+            'endCursor': GraphQLField(
+                GraphQLString,
+            ),
+        })
+        self.types_dict[self.name] = typ
+        return typ
+
+
+class EntityConnectionType(EntitySetType):
+    
+    def get_edge_type(self):
+        entity_name = super(EntitySetType, self).name
+        name = "%sEdge" % entity_name
+        if name in self.types_dict:
+            return self.types_dict[name]
+        node_type = EntityType.as_graphql(self)
+        edge_type = GraphQLObjectType(name, {
+            'node': GraphQLField(node_type),
+            'cursor': GraphQLField(GraphQLNonNull(GraphQLString))
+        })
+        self.types_dict[name] = edge_type
+        return edge_type
+
+    # FIXME
+    # @property
+    # def name(self):
+    #     entity_name = super(EntityConnectionType, self).name
+    #     return "%sConnection" % entity_name
+
+    def as_graphql(self):
+        entity_name = super(EntityConnectionType, self).name
+        name = "%sConnection" % entity_name
+        if name in self.types_dict:
+            return self.types_dict[name]
+        edge_type = self.get_edge_type()
+        page_info_type = PageInfoType(self.types_dict).as_graphql()
+        connection_type = GraphQLObjectType(name, {
+            'pageInfo': GraphQLField(page_info_type),
+            'edges': GraphQLField(
+                GraphQLList(edge_type),
+            )
+        })
+        self.types_dict[name] = connection_type
+        return connection_type
+    
+    arguments = {
+        'before': GraphQLArgument(GraphQLString),
+        'after': GraphQLArgument(GraphQLString),
+        'first': GraphQLArgument(GraphQLInt),
+        'last': GraphQLArgument(GraphQLInt),
+    }
+    
+    def __call__(self, obj, kwargs, info):
+        query = self.get_query(**kwargs)
+        def edges():
+            for index, obj in enumerate(query):
+                cursor = Cursor(**{
+                    'order_by': self.order_by.name,
+                    'id': obj.id,
+                })
+                yield as_object({
+                    'node': obj,
+                    'cursor': cursor.dumps(),
+                })
+        return as_object({
+            'edges': list(edges())
+        })
+    
+    
+    # arg = CallableCollector()
+    
+    # @arg
+    # def before(self, query, cursor):
+    #     1
+    
+    # @arg
+    # def after(self, query, cursor):
+    #     1
+    
+    # @arg
+    # def first(self, query, count):
+    #     1
+    
+    # @arg
+    # def last(self, query):
+    #     1
+    
+    
+    def get_query(self, **kwargs):
+        # TODO forbid presence of both before and after in kwargs
+        query = EntitySetType.get_query(self, **kwargs)
+        filter = {}
+        if 'after' in kwargs:
+            cursor = kwargs['after']
+            cursor = Cursor.loads(cursor)
+            if cursor.order_by != self.order_by.name:
+                assert 0
+            # TODO only id is supported
+            query = query.filter(lambda e: e.id > cursor.id)
+        if 'first' in kwargs:
+            query = query.limit(kwargs['first'])
+        return query
+
+
+    
+class Cursor(namedtuple('CursorNT', ['id', 'order_by'])):
+
+    def dumps(self):
+        return ':'.join(map(str, self))
+    
+    @classmethod
+    def loads(cls, string):
+        id, order_by = string.split(':')
+        id = int(id)
+        return cls(id, order_by)
+
+
 
 @Type.register(int)
 class IntType(Type):

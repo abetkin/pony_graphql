@@ -14,17 +14,10 @@ from graphql.core.type import (
 
 from pony import orm
 
+from .util import ClassAttr, as_object as dict_as_obj
+
 def not_implemented(*args, **kw):
     raise NotImplementedError
-
-
-class dict_as_obj(object):
-    
-    def __init__(self, d):
-        self.__dict__ = d
-        
-    def __repr__(self):
-        return repr(self.__dict__)
 
 
 
@@ -53,26 +46,18 @@ class MutationMarker(object):
         })
 
 
-class ClassAttrRef(object):
-    def __init__(self, attr_name):
-        self.attr_name = attr_name
-    
-    def __get__(self, isinstance, owner):
-        return getattr(owner, self.attr_name)
-
-
 class RelayMutationType(object):
 
     input_fields_getter = lambda *args: {}
     output_fields_getter = lambda *args: {}
     mutate_func = not_implemented
 
-    name = ClassAttrRef('__name__')
+    name = ClassAttr('__name__')
     
     mark = MutationMarker()
     
     # This attribute allows declared classes to be collected as mutations
-    __mutation__ = ClassAttrRef('mark')
+    __mutation__ = ClassAttr('mark')
     
     def __init__(self, mutate=None, get_input_fields=None, get_output_fields=None,
                  **kwargs):
@@ -132,6 +117,7 @@ class RelayMutationType(object):
             },
             resolver=self
         )
+
 
 class PonyMutation(RelayMutationType):
 
