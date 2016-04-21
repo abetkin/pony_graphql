@@ -110,6 +110,10 @@ class EntityType(Type):
     @UpdateEntityMutation.mark
     def update(self, obj, **kwargs):
         for key, val in kwargs.items():
+            attr_type = getattr(self.entity, key).py_type
+            if isinstance(attr_type, core.Entity):
+                # have to do this because of Pony bug
+                val = attr_type[val]
             setattr(obj, key, val)
     
     @DeleteEntityMutation.mark

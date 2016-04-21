@@ -49,7 +49,7 @@ class MutationMarker(object):
     def __get__(self, instance, owner):
         return self.decorator({
             'type': owner,
-            'name': owner.__name__,
+            'name': owner.name,
         })
 
 
@@ -66,11 +66,12 @@ class RelayMutationType(object):
     input_fields_getter = lambda *args: {}
     output_fields_getter = lambda *args: {}
     mutate_func = not_implemented
+
+    name = ClassAttrRef('__name__')
     
     mark = MutationMarker()
     
-    #
-    #
+    # This attribute allows declared classes to be collected as mutations
     mutation = ClassAttrRef('mark')
     
     def __init__(self, mutate=None, get_input_fields=None, get_output_fields=None,

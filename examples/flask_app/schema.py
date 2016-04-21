@@ -4,7 +4,7 @@ import os, sys
 import pony
 from pony import orm
 from pony_graphql import generate_schema
-from pony_graphql.mutations import EntityMutation, DbMutation
+from pony_graphql.mutations import EntityMutation, UpdateEntityMutation, DbMutation
 
 db_name = 'flask.db'
 
@@ -31,7 +31,18 @@ class Artist(db.Entity):
     def customMutation(self):
         'Takes no args'
         
+    @UpdateEntityMutation.mark
+    def customUpdate(self, genres):
+        '''
+        Marked with UpdateEntityMutation, so
+        can take keywords matching entity fields
+        '''
+        self.genres = [Genre[pk] for pk in genres]
+        
     class changeAge(EntityMutation):
+        '''
+        You can also define custom mutation with a class
+        '''
     
         def get_input_fields(self):
             ret = EntityMutation.get_input_fields(self)
