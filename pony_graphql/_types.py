@@ -51,8 +51,7 @@ class Type(object):
 
     def dispatch_attr(cls, attr):
         if isinstance(attr, Set):
-            # TODO connection!
-            return EntitySetType
+            return EntityConnectionType
         return cls.dispatch(attr.py_type)
 
     @classmethod
@@ -207,7 +206,7 @@ class EntitySetType(EntityType):
         entity_type = EntityType.as_graphql(self)
         return GraphQLList(entity_type)
     
-    def get_query(self, **kwargs):
+    def get_query(self, obj, **kwargs):
         if hasattr(self, 'attr'):
             # TODO attr -> _attr_ or isinstance(self, Attr)
             query = getattr(obj, self.attr.name).select()
@@ -216,7 +215,7 @@ class EntitySetType(EntityType):
         return query.order_by(self.order_by)
     
     def __call__(self, obj, kwargs, info):
-        query = self.get_query(**kwargs)
+        query = self.get_query(obj, **kwargs)
         return list(query)
         
 
@@ -246,14 +245,17 @@ class PageInfoType(Type):
 
 class EntityConnectionType(EntitySetType):
     
+    @property
+    def node_type(self):
+        return EntityType.as_graphql(self)
+    
     def get_edge_type(self):
         entity_name = super(EntitySetType, self).name
         name = "%sEdge" % entity_name
         if name in self.types_dict:
             return self.types_dict[name]
-        node_type = EntityType.as_graphql(self)
         edge_type = GraphQLObjectType(name, {
-            'node': GraphQLField(node_type),
+            'node': GraphQLField(self.node_type),
             'cursor': GraphQLField(GraphQLNonNull(GraphQLString))
         })
         self.types_dict[name] = edge_type
@@ -276,6 +278,9 @@ class EntityConnectionType(EntitySetType):
             'pageInfo': GraphQLField(page_info_type),
             'edges': GraphQLField(
                 GraphQLList(edge_type),
+            ),
+            'items': GraphQLField(
+                GraphQLList(self.node_type),
             )
         })
         self.types_dict[name] = connection_type
@@ -289,44 +294,26 @@ class EntityConnectionType(EntitySetType):
     }
     
     def __call__(self, obj, kwargs, info):
-        query = self.get_query(**kwargs)
-        def edges():
-            for index, obj in enumerate(query):
-                cursor = Cursor(**{
-                    'order_by': self.order_by.name,
-                    'id': obj.id,
-                })
-                yield as_object({
-                    'node': obj,
-                    'cursor': cursor.dumps(),
-                })
+        query = self.get_query(obj, **kwargs)
+        edges = []
+        for index, obj in enumerate(query):
+            cursor = Cursor(**{
+                'order_by': self.order_by.name,
+                'id': obj.id,
+            })
+            edges.append(as_object({
+                'node': obj,
+                'cursor': cursor.dumps(),
+            }))
+        
         return as_object({
-            'edges': list(edges())
+            'edges': edges,
+            'items': lambda: [e.node for e in edges],
         })
     
-    
-    # arg = CallableCollector()
-    
-    # @arg
-    # def before(self, query, cursor):
-    #     1
-    
-    # @arg
-    # def after(self, query, cursor):
-    #     1
-    
-    # @arg
-    # def first(self, query, count):
-    #     1
-    
-    # @arg
-    # def last(self, query):
-    #     1
-    
-    
-    def get_query(self, **kwargs):
+    def get_query(self, obj, **kwargs):
         # TODO forbid presence of both before and after in kwargs
-        query = EntitySetType.get_query(self, **kwargs)
+        query = EntitySetType.get_query(self, obj, **kwargs)
         filter = {}
         if 'after' in kwargs:
             cursor = kwargs['after']
@@ -372,10 +359,4 @@ class BooleanType(Type):
     
     def as_graphql(self):
         return GraphQLBoolean
-        
-
-class ConnectionField(object):
-    1
-
-
 
