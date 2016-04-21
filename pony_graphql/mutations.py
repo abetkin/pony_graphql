@@ -39,7 +39,7 @@ class MutationMarker(object):
                 return self
             if not self.get('__named__'):
                 self['name'] = func.__name__
-            func.mutation = self
+            func.__mutation__ = self
             return func 
     
     def __init__(self, decorator=None):
@@ -72,7 +72,7 @@ class RelayMutationType(object):
     mark = MutationMarker()
     
     # This attribute allows declared classes to be collected as mutations
-    mutation = ClassAttrRef('mark')
+    __mutation__ = ClassAttrRef('mark')
     
     def __init__(self, mutate=None, get_input_fields=None, get_output_fields=None,
                  **kwargs):

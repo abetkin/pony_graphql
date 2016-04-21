@@ -110,10 +110,14 @@ class EntityType(Type):
     @UpdateEntityMutation.mark
     def update(self, obj, **kwargs):
         for key, val in kwargs.items():
-            attr_type = getattr(self.entity, key).py_type
-            if isinstance(attr_type, core.Entity):
+            py_type = getattr(self.entity, key).py_type
+            if issubclass(py_type, core.Entity):
                 # have to do this because of Pony bug
-                val = attr_type[val]
+                from collections import Sequence
+                if isinstance(val, Sequence):
+                    val = [py_type[item] for item in val]
+                else:
+                    val = py_type[val]
             setattr(obj, key, val)
     
     @DeleteEntityMutation.mark
@@ -142,17 +146,17 @@ class EntityType(Type):
     
         
     def _collect_mutations(self):
-        is_mutation = lambda value: hasattr(value, 'mutation') and callable(value)
+        is_mutation = lambda value: hasattr(value, '__mutation__')
         for name, val in self.__class__.__dict__.items():
             if is_mutation(val):
-                config = dict(val.mutation)
+                config = dict(val.__mutation__)
                 mutate = getattr(self, name)
                 if inspect.ismethod(mutate):
                     config['mutate'] = mutate
                 yield config
         for name, val in self.entity.__dict__.items():
             if is_mutation(val):
-                config = dict(val.mutation)
+                config = dict(val.__mutation__)
                 mutate = getattr(self.entity, name)
                 if inspect.ismethod(mutate):
                     config['mutate'] = mutate
@@ -161,11 +165,10 @@ class EntityType(Type):
     def make_mutations(self):
         fields = {}
         for config in self._collect_mutations():
-            kw = dict(config)
-            name = kw['name']
-            kw['name'] = ''.join((name[0].upper(), name[1:]))
-            kw['name'] = ''.join((kw['name'], self.name))
-            mut = kw['type'].from_entity_type(self, **kw)
+            name = config['name']
+            config['name'] = ''.join((name[0].upper(), name[1:]))
+            config['name'] = ''.join((config['name'], self.name))
+            mut = config['type'].from_entity_type(self, **config)
             mutation_name = ''.join((name, self.name))
             fields[mutation_name] = mut.make_field()
         return fields
