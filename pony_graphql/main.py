@@ -20,9 +20,9 @@ def generate_schema(db):
         typ = EntitySetType(entity, _types)
         fields[name] = typ.make_field()
 
-    for name, entity in db.entities.items():
-        typ = EntityConnectionType(entity, _types)
-        fields['%sConnection' % typ.name] = typ.make_field()
+    # for name, entity in db.entities.items():
+    #     typ = EntityConnectionType(entity, _types)
+    #     fields['%sConnection' % typ.name] = typ.make_field()
 
     for name, entity in db.entities.items():
         typ = EntityType(entity, _types)
