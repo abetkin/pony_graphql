@@ -189,8 +189,7 @@ class EntityType(Type):
 
 class EntitySetType(EntityType):
 
-    @property
-    def order_by(self):
+    def get_order_by(self):
         return self.entity._pk_
 
     arguments = {}
@@ -207,13 +206,15 @@ class EntitySetType(EntityType):
         entity_type = EntityType.as_graphql(self)
         return GraphQLList(entity_type)
     
-    def get_query(self, obj, **kwargs):
+    def get_query(self, obj, order_by=None, **kwargs):
         if hasattr(self, 'attr'):
             # TODO attr -> _attr_ or isinstance(self, Attr)
             query = getattr(obj, self.attr.name).select()
         else:
             query = select(o for o in self.entity)
-        return query.order_by(self.order_by)
+        if order_by is None:
+            order_by = self.get_order_by()
+        return query.order_by(order_by)
     
     def __call__(self, obj, kwargs, info):
         query = self.get_query(obj, **kwargs)
@@ -291,20 +292,15 @@ class EntityConnectionType(EntitySetType):
     
     def __call__(self, obj, kwargs, info):
         query = self.get_query(obj, **kwargs)
-        filtered_query = self.filter_query(query, **kwargs)
+        page = self.paginate_query(query, **kwargs)
         edges = []
-        for index, obj in enumerate(filtered_query):
-            cursor = Cursor(**{
-                'order_by': self.order_by.name,
-                'id': obj.id,
-            })
+        for index, obj in enumerate(page):
             edges.append(as_object({
                 'node': obj,
-                'cursor': cursor.dumps(),
+                'cursor': str(obj.id),
             }))
         
-        def get_id(index):
-            return Cursor.loads(edges[index].cursor).id
+        get_id = lambda index: int(edges[index].cursor)
         has_next = edges and query.filter(lambda e: e.id > get_id(-1)).exists()
         has_prev = edges and query.filter(lambda e: e.id < get_id(0)).exists()
         
@@ -317,34 +313,30 @@ class EntityConnectionType(EntitySetType):
             'items': lambda: [e.node for e in edges],
         })
     
-    def filter_query(self, query, **kwargs):
-        # TODO forbid presence of both before and after in kwargs
-        # query = EntitySetType.get_query(self, obj, **kwargs)
-        filter = {}
-        if 'after' in kwargs:
-            cursor = kwargs['after']
-            cursor = Cursor.loads(cursor)
-            if cursor.order_by != self.order_by.name:
-                assert 0
+    def paginate_query(self, query, **kwargs):
+        if 'before' in kwargs or 'last' in kwargs:
+            cursor = kwargs.get('before'),
+            limit = kwargs.get('last'),
+            filter = lambda e: e.id > cursor
+        else:
+            filter = lambda e: e.id < cursor
+            cursor = kwargs.get('before')
+            limit = kwargs.get('last')
+
+        if cursor is not None:
+            cursor = int(cursor)
             # TODO only id is supported
-            query = query.filter(lambda e: e.id > cursor.id)
-        if 'first' in kwargs:
-            query = query.limit(kwargs['first'])
+            query = query.filter(filter)
+        if limit is not None:
+            query = query.limit(limit)
         return query
-
-
     
-class Cursor(namedtuple('CursorNT', ['id', 'order_by'])):
-
-    def dumps(self):
-        return ':'.join(map(str, self))
-    
-    @classmethod
-    def loads(cls, string):
-        id, order_by = string.split(':')
-        id = int(id)
-        return cls(id, order_by)
-
+    def get_query(self, obj, order_by=None, **kwargs):
+        # TODO forbid presence of both before and after in kwargs
+        order_by = order_by or self.get_order_by()
+        if 'before' in kwargs or 'last' in kwargs:
+            order_by = order_by.desc()
+        return EntitySetType.get_query(self, obj, order_by=order_by, **kwargs)        
 
 
 @Type.register(int)
