@@ -18,6 +18,8 @@ except OSError:
     pass
 db = orm.Database('sqlite', db_name, create_db=True)
 
+from datetime import datetime
+
 class Genre(db.Entity):
     name = orm.Required(str)
     artists = orm.Set('Artist')
@@ -57,6 +59,7 @@ class Artist(db.Entity):
 
 
 class Piece(db.Entity):
+    created = orm.Optional(datetime)
     title = orm.Required(str)
     artist = orm.Required(Artist)
 
@@ -66,7 +69,7 @@ db.generate_mapping(check_tables=True, create_tables=True)
 with orm.db_session:
     pop = Genre(name='pop')
     a = Artist(name='Sia', age=40, genres=[pop])
-    Piece(title="Chandelier", artist=a)
+    Piece(title="Chandelier", artist=a, created=datetime.now())
     Piece(title="Bring it to me", artist=a)
 
 pony.options.INNER_JOIN_SYNTAX = True

@@ -4,7 +4,8 @@ from pony.orm import core
 
 from graphql.core.type.definition import GraphQLArgument, GraphQLField, GraphQLNonNull, \
     GraphQLObjectType, GraphQLList, GraphQLInputObjectType, GraphQLInputObjectField, GraphQLInputObjectField
-from graphql.core.type.scalars import GraphQLString, GraphQLInt, GraphQLBoolean
+from graphql.core.type.scalars import GraphQLString, GraphQLInt, GraphQLBoolean, GraphQLScalarType
+from graphql.core.language.ast import StringValue
 from graphql.core.type.schema import GraphQLSchema
 
 
@@ -365,3 +366,31 @@ class BooleanType(Type):
     def as_graphql(self):
         return GraphQLBoolean
 
+from datetime import datetime
+
+@Type.register(datetime)
+class Datetime(Type):
+    
+    
+    def parse_literal(self, ast):
+        if isinstance(ast, StringValue):
+            return ast.value
+        return None
+
+    from .util import parse_datetime
+    
+    def serialize(self, dt):
+        return dt.isoformat()
+
+    def as_graphql(self):
+        if self.name in self.types_dict:
+            return self.types_dict[self.name]
+        ret = GraphQLScalarType(
+            name=self.name,
+            description='The `Datetime` scalar type',
+            serialize=self.serialize,
+            parse_value=self.parse_datetime,
+            parse_literal=self.parse_literal
+        )
+        self.types_dict[self.name] = ret
+        return ret
