@@ -232,12 +232,6 @@ class PageInfoType(Type):
             'hasPreviousPage': GraphQLField(
                 GraphQLNonNull(GraphQLBoolean),
             ),
-            'startCursor': GraphQLField(
-                GraphQLString,
-            ),
-            'endCursor': GraphQLField(
-                GraphQLString,
-            ),
         })
         self.types_dict[self.name] = typ
         return typ
@@ -267,17 +261,18 @@ class EntityConnectionType(EntitySetType):
     #     entity_name = super(EntityConnectionType, self).name
     #     return "%sConnection" % entity_name
 
+    def get_page_info_type(self):
+        return PageInfoType(self.types_dict).as_graphql()
+
     def as_graphql(self):
         entity_name = super(EntityConnectionType, self).name
         name = "%sConnection" % entity_name
         if name in self.types_dict:
             return self.types_dict[name]
-        edge_type = self.get_edge_type()
-        page_info_type = PageInfoType(self.types_dict).as_graphql()
         connection_type = GraphQLObjectType(name, {
-            'pageInfo': GraphQLField(page_info_type),
+            'pageInfo': GraphQLField(self.get_page_info_type()),
             'edges': GraphQLField(
-                GraphQLList(edge_type),
+                GraphQLList(self.get_edge_type()),
             ),
             'items': GraphQLField(
                 GraphQLList(self.node_type),
@@ -295,8 +290,9 @@ class EntityConnectionType(EntitySetType):
     
     def __call__(self, obj, kwargs, info):
         query = self.get_query(obj, **kwargs)
+        filtered_query = self.filter_query(query, **kwargs)
         edges = []
-        for index, obj in enumerate(query):
+        for index, obj in enumerate(filtered_query):
             cursor = Cursor(**{
                 'order_by': self.order_by.name,
                 'id': obj.id,
@@ -306,14 +302,23 @@ class EntityConnectionType(EntitySetType):
                 'cursor': cursor.dumps(),
             }))
         
+        def get_id(index):
+            return Cursor.loads(edges[index].cursor).id
+        has_next = edges and query.filter(lambda e: e.id > get_id(-1)).exists()
+        has_prev = edges and query.filter(lambda e: e.id < get_id(0)).exists()
+        
         return as_object({
+            'pageInfo': as_object({
+                'hasNextPage': has_next,
+                'hasPreviousPage': has_prev,
+            }),
             'edges': edges,
             'items': lambda: [e.node for e in edges],
         })
     
-    def get_query(self, obj, **kwargs):
+    def filter_query(self, query, **kwargs):
         # TODO forbid presence of both before and after in kwargs
-        query = EntitySetType.get_query(self, obj, **kwargs)
+        # query = EntitySetType.get_query(self, obj, **kwargs)
         filter = {}
         if 'after' in kwargs:
             cursor = kwargs['after']

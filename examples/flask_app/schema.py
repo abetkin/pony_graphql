@@ -26,6 +26,7 @@ class Artist(db.Entity):
     name = orm.Required(str)
     age = orm.Optional(int)
     genres = orm.Set(Genre)
+    pieces = orm.Set('Piece')
     
     @EntityMutation.mark
     def customMutation(self):
@@ -55,11 +56,18 @@ class Artist(db.Entity):
             obj.age = age
 
 
+class Piece(db.Entity):
+    title = orm.Required(str)
+    artist = orm.Required(Artist)
+
+
 db.generate_mapping(check_tables=True, create_tables=True)
 
 with orm.db_session:
     pop = Genre(name='pop')
     a = Artist(name='Sia', age=40, genres=[pop])
+    Piece(title="Chandelier", artist=a)
+    Piece(title="Bring it to me", artist=a)
 
 pony.options.INNER_JOIN_SYNTAX = True
 
