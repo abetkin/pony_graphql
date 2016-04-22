@@ -370,14 +370,12 @@ from datetime import datetime
 
 @Type.register(datetime)
 class Datetime(Type):
-    
-    
     def parse_literal(self, ast):
         if isinstance(ast, StringValue):
             return ast.value
         return None
 
-    from .util import parse_datetime
+    from .util import parse_datetime as parse_value
     
     def serialize(self, dt):
         return dt.isoformat()
@@ -389,8 +387,31 @@ class Datetime(Type):
             name=self.name,
             description='The `Datetime` scalar type',
             serialize=self.serialize,
-            parse_value=self.parse_datetime,
+            parse_value=self.parse_value,
             parse_literal=self.parse_literal
         )
         self.types_dict[self.name] = ret
         return ret
+
+from decimal import Decimal
+
+@Type.register(Decimal)
+class Decimal(Type):
+    def parse_literal(self, ast):
+        if isinstance(ast, StringValue):
+            return ast.value
+        return None
+
+    def as_graphql(self):
+        if self.name in self.types_dict:
+            return self.types_dict[self.name]
+        ret = GraphQLScalarType(
+            name=self.name,
+            description='The `Datetime` scalar type',
+            serialize=str,
+            parse_value=Decimal,
+            parse_literal=self.parse_literal
+        )
+        self.types_dict[self.name] = ret
+        return ret
+        

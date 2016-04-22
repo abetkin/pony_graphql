@@ -19,10 +19,14 @@ except OSError:
 db = orm.Database('sqlite', db_name, create_db=True)
 
 from datetime import datetime
+from decimal import Decimal
 
 class Genre(db.Entity):
     name = orm.Required(str)
     artists = orm.Set('Artist')
+
+class Salary(db.Entity):
+    sum = orm.Required(Decimal)
 
 class Artist(db.Entity):
     name = orm.Required(str)
