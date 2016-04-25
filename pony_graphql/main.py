@@ -16,9 +16,6 @@ def generate_schema(db):
     _types = {}
     fields = {}
     mutations = {}
-    # for name, entity in db.entities.items():
-    #     typ = EntitySetType(entity, _types)
-    #     fields[name] = typ.make_field()
 
     for name, entity in db.entities.items():
         typ = EntityConnectionType(entity, _types)

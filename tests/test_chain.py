@@ -111,7 +111,6 @@ class TestChain(unittest.TestCase):
                         for p in a.pieces:
                             yield p
         pi = orm.select(g())[:]
-        ipdb.set_trace()
         self.assertEqual(song.title, 'Chandelier')
     
     @orm.db_session    

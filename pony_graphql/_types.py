@@ -315,13 +315,13 @@ class EntityConnectionType(EntitySetType):
     
     def paginate_query(self, query, **kwargs):
         if 'before' in kwargs or 'last' in kwargs:
-            cursor = kwargs.get('before'),
-            limit = kwargs.get('last'),
-            filter = lambda e: e.id > cursor
-        else:
-            filter = lambda e: e.id < cursor
             cursor = kwargs.get('before')
             limit = kwargs.get('last')
+            filter = lambda e: e.id < cursor
+        else:
+            filter = lambda e: e.id > cursor
+            cursor = kwargs.get('after')
+            limit = kwargs.get('first')
 
         if cursor is not None:
             cursor = int(cursor)

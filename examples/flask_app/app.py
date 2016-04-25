@@ -17,8 +17,7 @@ from graphql.core.execution import Executor, SynchronousExecutionMiddleware
 class PonyMiddleware(object):
     @staticmethod
     def run_resolve_fn(resolver, original_resolver):
-        import ipdb
-        with ipdb.launch_ipdb_on_exception(), orm.db_session:
+        with orm.db_session:
             return SynchronousExecutionMiddleware.run_resolve_fn(resolver, original_resolver)
 
     @staticmethod
