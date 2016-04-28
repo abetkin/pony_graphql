@@ -9,25 +9,5 @@ from graphql.core.type import GraphQLID, GraphQLInputObjectType, \
     
 from graphql.core.type.schema import GraphQLSchema
 
-from _types import EntityType, EntitySetType, EntityConnectionType
-
-
-def generate_schema(db):  
-    _types = {}
-    fields = {}
-    mutations = {}
-
-    for name, entity in db.entities.items():
-        typ = EntityConnectionType(entity, _types)
-        fields[typ.name] = typ.make_field()
-
-    for name, entity in db.entities.items():
-        typ = EntityType(entity, _types)
-        mutations.update(typ.make_mutations())
-
-    if getattr(db, 'mutations', None):
-        mutations.update(db.mutations)
-
-    query = GraphQLObjectType(name='Query', fields=fields)
-    mutation = GraphQLObjectType('Mutation', fields=mutations)
-    return GraphQLSchema(query=query, mutation=mutation)
+# from _types import EntityType, EntitySetType, EntityConnectionType
+from ._types import generate_schema
