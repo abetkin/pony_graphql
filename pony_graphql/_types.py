@@ -39,7 +39,14 @@ class Type(object):
 
     def __init__(self,  types_dict):
         self.types_dict = types_dict
+    
+    def get_child_type(self, field_name):
+        # disable adding children tree into the query ast
+        return None
         
+    add_to_ast = True
+        
+    
     name = ClassAttr('__name__')
     
     @classmethod
@@ -96,10 +103,12 @@ class Query(Type):
 
     instance = None
 
+    @classmethod
     def from_db(cls, db, types_dict):
         qu = cls.instance = cls(types_dict)
+        qu.field_types = {}
         for name, entity in db.entities.items():
-            typ = EntityConnectionType(entity, _types)
+            typ = EntityConnectionType(entity, types_dict)
             qu.field_types[typ.name] = typ.make_field()
         return qu
 
@@ -116,14 +125,14 @@ class Mutation(Type):
         mut = cls.instance = cls(types_dict)
         mut.field_types = {}
         for name, entity in db.entities.items():
-            typ = EntityType(entity, _types)
+            typ = EntityType(entity, types_dict)
             mut.field_types.update(typ.make_mutations())
         if getattr(db, 'mutations', None):
             mut.field_types.update(db.mutations)
         return mut
     
     def as_graphql(self):
-        return GraphQLObjectType(self.name, fields=mut.field_types)
+        return GraphQLObjectType(self.name, fields=self.field_types)
 
 
 @Type.register(core.Entity)
@@ -140,12 +149,15 @@ class EntityType(Type):
         instance.attr = attr
         return instance
     
+    def get_child_type(self, field_name):
+        ret = self.field_types.get(field_name)
+        assert ret, field_name
+        return ret
+    
     def get_field_types(self):
         for attr in self.entity._attrs_:
             FieldType = self.dispatch_attr(attr)
-            if FieldType.instance is None:
-                FieldType.instance = FieldType.from_attr(attr, self.types_dict)
-            field_type = FieldType.instance
+            field_type = FieldType.from_attr(attr, self.types_dict)
             yield attr.name, field_type
             # TODO merge into dispatch_attr
     
@@ -178,11 +190,11 @@ class EntityType(Type):
     def as_graphql(self):
         if self.name in self.types_dict:
             return self.types_dict[self.name]
-        self.field_types = self.get_field_types()
+        self.field_types = dict(self.get_field_types())
         def get_fields():
             return {
                 name: typ.make_field()
-                for name, typ in self.field_types
+                for name, typ in self.field_types.items()
             }
         object_type = GraphQLObjectType(
             name=self.name,
@@ -280,15 +292,6 @@ class PageInfoType(Type):
         return typ
 
 
-class AType:
-    pony_exclude = True
-    
-    def get_child_type(self, field_name):
-        2
-
-    def resolve_path(self, path_item):
-        return self
-
 class EntityConnectionType(EntitySetType):
     
     @property
@@ -306,6 +309,11 @@ class EntityConnectionType(EntitySetType):
         })
         self.types_dict[name] = edge_type
         return edge_type
+
+    # FIXME
+    def make_field_types(self):
+        if self.field_types is None:
+            self.field_types = dict(self.get_field_types())
 
     # FIXME
     # @property
@@ -340,14 +348,41 @@ class EntityConnectionType(EntitySetType):
         'last': GraphQLArgument(GraphQLInt),
     }
     
+    def get_child_type(self, field_name):
+        if field_name == 'pageInfo':
+            return None
+        if field_name in [
+            'items', 'edges', 'node'
+        ]:
+            return self
+        self.make_field_types()
+        return EntitySetType.get_child_type(self, field_name)
+    
+    def get_pony_chain(self, chain):
+        obj = self
+        seen = {obj}
+        for item in chain:
+            obj = obj.get_child_type(item)
+            if obj is not None and obj not in seen:
+                yield item
+                seen.add(obj)
+            elif obj is None:
+                break
+            
+        
+    
     def __call__(self, obj, kwargs, info):
         # ast - ?
         from .ast_aware import AstTraverser
         import ipdb
         with ipdb.launch_ipdb_on_exception():
             tra = AstTraverser(info)
-            chains = list(tra)
-            print(chains)
+            pony = []
+            for chain in tra:
+                pony_ch = list(self.get_pony_chain(chain))
+                pony.append(pony_ch)
+            print('Pony AST: %s' % pony)
+            return
         query = self.get_query(obj, **kwargs)
         page = self.paginate_query(query, **kwargs)
         edges = []
