@@ -259,15 +259,18 @@ class EntitySetType(EntityType):
         entity_type = EntityType.as_graphql(self)
         return GraphQLList(entity_type)
     
-    def get_query(self, obj, order_by=None, **kwargs):
-        if hasattr(self, 'attr'):
-            # TODO attr -> _attr_ or isinstance(self, Attr)
-            query = getattr(obj, self.attr.name).select()
-        else:
-            query = select(o for o in self.entity)
-        if order_by is None:
-            order_by = self.get_order_by()
-        return query.order_by(order_by)
+    def get_query(self, obj, paths, **kwargs):
+        1
+    
+    # def get_query(self, obj, order_by=None, **kwargs):
+    #     if hasattr(self, 'attr'):
+    #         # TODO attr -> _attr_ or isinstance(self, Attr)
+    #         query = getattr(obj, self.attr.name).select()
+    #     else:
+    #         query = select(o for o in self.entity)
+    #     if order_by is None:
+    #         order_by = self.get_order_by()
+    #     return query.order_by(order_by)
     
     def __call__(self, obj, kwargs, info):
         query = self.get_query(obj, **kwargs)
@@ -382,6 +385,7 @@ class EntityConnectionType(EntitySetType):
                 pony_ch = list(self.get_pony_chain(chain))
                 pony.append(pony_ch)
             print('Pony AST: %s' % pony)
+            # make query
             return
         query = self.get_query(obj, **kwargs)
         page = self.paginate_query(query, **kwargs)
