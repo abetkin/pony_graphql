@@ -15,7 +15,7 @@ import json
 
 from singledispatch import singledispatch
 
-from mutations import EntityMutation, CreateEntityMutation, DeleteEntityMutation, \
+from .mutations import EntityMutation, CreateEntityMutation, DeleteEntityMutation, \
         UpdateEntityMutation
 
 from .util import ClassAttr, as_object
@@ -259,8 +259,27 @@ class EntitySetType(EntityType):
         entity_type = EntityType.as_graphql(self)
         return GraphQLList(entity_type)
     
-    def get_query(self, obj, paths, **kwargs):
-        1
+    def get_query(self, paths, obj, **kwargs):
+        assert not hasattr(self, 'attr')
+        ret = []
+        for path in paths:
+            if not path:
+                continue
+            path = ['x'] + path
+            ret.append(
+                '.'.join(path)
+            )
+        ifs = '...'
+        query = '''
+        %(selects)s
+        for x in %(entity)s
+        %(ifs)s
+        ''' % {
+            'selects': ret,
+            'entity': self.entity,
+            'ifs': ifs
+        }
+        
     
     # def get_query(self, obj, order_by=None, **kwargs):
     #     if hasattr(self, 'attr'):
@@ -273,6 +292,7 @@ class EntitySetType(EntityType):
     #     return query.order_by(order_by)
     
     def __call__(self, obj, kwargs, info):
+        # if ...
         query = self.get_query(obj, **kwargs)
         return list(query)
         
@@ -387,7 +407,7 @@ class EntityConnectionType(EntitySetType):
             print('Pony AST: %s' % pony)
             # make query
             return
-        query = self.get_query(obj, **kwargs)
+        query = self.get_query(paths, obj, **kwargs)
         page = self.paginate_query(query, **kwargs)
         edges = []
         for index, obj in enumerate(page):

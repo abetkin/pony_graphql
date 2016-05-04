@@ -1,5 +1,6 @@
 import collections
 
+from pony import orm
 from graphql.core.execution.base import collect_fields
 # from . import _types
 
@@ -42,24 +43,8 @@ class AstTraverser(object):
 
 import os
 
-# entity = 'Artist'
-# selects = '[x.genres.title]'
-# ifs = """
-# x.age < 100
-# """
-# if not isinstance(ifs, (list, tuple)):
-#     ifs = [ifs]
-# ifs = ["if %s" % _if.strip() for _if in ifs]
-# import os
-# ifs = os.linesep.join(ifs)
-# query = '''
-# %(selects)s
-# for x in %(entity)s
-# %(ifs)s
-# ''' % locals()
 
-
-class QResult(dict):
+class Tree(dict):
 
     def __init__(self, args, **kw):
         dict.__init__(self, args, **kw)
@@ -71,17 +56,26 @@ class QResult(dict):
         self[path[-1]] = value
 
 
-class QHandler(object):
+class QueryBuilder(object):
     
-    def __init__(self, **kw):
+    def __init__(self, entity, paths, ifs, fors=None, **kw):
+        kw.update({
+            'entity': entity,
+            'paths': paths,
+            'ifs': ifs,
+            'fors': fors,
+        })
         self.__dict__.update(kw)
     
-    def get_query(self):
+    def __repr__(self):
         return ' '.join([
             self.get_selects(),
             self.get_fors(),
             self.get_ifs(),
         ])
+        
+    def select(self):
+        return orm.select(repr(self))
     
     def get_selects(self):
         ret = []
@@ -110,7 +104,7 @@ class QHandler(object):
         ])
     
     def parse_result(self, items):
-        ret = QResult()
+        ret = Tree()
         for path, val in zip(self.paths, items):
             ret.set_at(path, val)
         return ret
