@@ -11,3 +11,5 @@ from graphql.core.type.schema import GraphQLSchema
 
 # from _types import EntityType, EntitySetType, EntityConnectionType
 from ._types import generate_schema
+
+# TODO remove

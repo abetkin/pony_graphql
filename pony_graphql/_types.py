@@ -23,9 +23,6 @@ from .util import ClassAttr, as_object
 # TODO metaclass instead of decorator ?
 
 
-#
-# TODO cache python types also
-#
 
 def generate_schema(db):  
     _types = {}

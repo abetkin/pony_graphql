@@ -1,10 +1,10 @@
 import collections
 
-from pony import orm
+from pony import orm, py23compat as compat
 from graphql.core.execution.base import collect_fields
 # from . import _types
 
-
+from cached_property import cached_property
 
 class AstTraverser(object):
 
@@ -46,8 +46,8 @@ import os
 
 class Tree(dict):
 
-    def __init__(self, args, **kw):
-        dict.__init__(self, args, **kw)
+    def __init__(self, *args, **kw):
+        dict.__init__(self, *args, **kw)
         self.__dict__ = self
 
     def set_at(self, path, value):
@@ -56,7 +56,11 @@ class Tree(dict):
         self[path[-1]] = value
 
 
+
+
 class QueryBuilder(object):
+    
+    order_by = None
     
     def __init__(self, entity, paths, ifs, fors=None, **kw):
         kw.update({
@@ -67,20 +71,39 @@ class QueryBuilder(object):
         })
         self.__dict__.update(kw)
     
+    @cached_property
+    def query(self):
+        return orm.select(repr(self))
+    
+    
+    
+    @property
+    def vars(self):
+        # TODO
+        return ['x']
+    
     def __repr__(self):
         return ' '.join([
-            self.get_selects(),
+            self.get_paths(),
             self.get_fors(),
             self.get_ifs(),
         ])
-        
-    def select(self):
-        return orm.select(repr(self))
     
-    def get_selects(self):
+    def order_by(self, f):
+        self.query = self.query.order_by(f)
+        return f
+    
+    def make_select(self):
+        # import ipdb
+        # with ipdb.launch_ipdb_on_exception():
+            
+        items = self.query[:]
+        return [self._parse_result(values) for values in items]
+    
+    def get_paths(self):
         ret = []
         prefix = None
-        if not getattr(self, 'fors', None):
+        if self.fors is None:
             prefix = 'x'
         for path in self.paths:
             if prefix:
@@ -88,23 +111,24 @@ class QueryBuilder(object):
             ret.append(
                 '.'.join(path)
             )
-        ret = '[%s]' % ', '.join(ret)
-        return ret
+        return '[%s]' % ', '.join(ret)
     
     def get_ifs(self):
+        if isinstance(self.ifs, compat.basestring):
+            self.ifs = [self.ifs]
         return ' '.join(
             'if %s' % s.strip() for s in self.ifs
         )
     
     def get_fors(self):
-        if getattr(self, 'fors', None):
+        if self.fors:
             return self.fors
         return ' '.join([
             'for x in self.entity'
         ])
     
-    def parse_result(self, items):
+    def _parse_result(self, values):
         ret = Tree()
-        for path, val in zip(self.paths, items):
+        for path, val in zip(self.paths, values):
             ret.set_at(path, val)
         return ret
