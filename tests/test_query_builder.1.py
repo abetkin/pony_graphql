@@ -100,3 +100,9 @@ class QBuilderTest(unittest.TestCase):
         self.assertEqual(obj.name, 'Umka')
         obj = items[-1]
         self.assertEqual(obj.name, 'Fedorov')
+        
+        
+'''
+TODO
+test graphql
+'''
