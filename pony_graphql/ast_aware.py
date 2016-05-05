@@ -3,6 +3,7 @@ import collections
 from pony import orm, py23compat as compat
 from graphql.core.execution.base import collect_fields
 # from . import _types
+from .util import ClassAttr, as_object
 
 from cached_property import cached_property
 
@@ -50,10 +51,65 @@ class Tree(dict):
         dict.__init__(self, *args, **kw)
         self.__dict__ = self
 
+    def __contains__(self, key):
+        return dict.__contains__(self, key)
+        
+
+    def new(self, key):
+        new = self.__class__()
+        new.entity_type = self.entity_type
+        
+        field = self.entity_type.field_types[key]
+        from _types import EntitySetType
+        if isinstance(field, EntitySetType):
+            # import ipdb; ipdb.set_trace()
+            new = new.Connection
+        return new
+
+    @cached_property
+    class Connection(object):
+    
+        def __init__(self, wrapped):
+            self.wrapped = wrapped
+        
+        # def __setitem__(self, key, value):
+        #     return getattr(self.wrapped, key)
+        
+        def __repr__(self):
+            return 'Connection: %s' % self.wrapped
+        
+        @property
+        def items(self):
+            import ipdb; ipdb.set_trace()
+            return list(self.wrapped)
+
+        @property
+        def __setitem__(self):
+            return self.wrapped.__setitem__
+        
+        @property
+        def edges(self):
+            return [
+                as_object({node: e})
+                for e in self.wrapped
+            ]
+        
+        
+
+
     def set_at(self, path, value):
+        obj = self
         for key in path[:-1]:
-            self = self.setdefault(key, self.__class__())
+            if key not in obj:
+                new = obj.new(key)
+                obj[key] = new
+            obj = obj[key]
+                
+        # import ipdb; ipdb.set_trace()
         self[path[-1]] = value
+    
+    # def 
+    
 
 
 
@@ -74,8 +130,14 @@ class QueryBuilder(object):
     @cached_property
     def query(self):
         return orm.select(repr(self))
-    
-    
+
+    # TODO repr for tree
+    def Tree(self, *args, **kw):
+        inst = Tree(*args, **kw)
+        inst.entity_type = self.entity_type
+        return inst
+        
+        
     
     @property
     def vars(self):
@@ -94,9 +156,6 @@ class QueryBuilder(object):
         return f
     
     def make_select(self):
-        # import ipdb
-        # with ipdb.launch_ipdb_on_exception():
-            
         items = self.query[:]
         return [self._parse_result(values) for values in items]
     
@@ -128,7 +187,8 @@ class QueryBuilder(object):
         ])
     
     def _parse_result(self, values):
-        ret = Tree()
+        # FIXME group_by id
+        ret = self.Tree()
         for path, val in zip(self.paths, values):
             ret.set_at(path, val)
         return ret

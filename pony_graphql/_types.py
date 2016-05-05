@@ -15,6 +15,8 @@ import json
 
 from singledispatch import singledispatch
 
+from cached_property import cached_property
+
 from .mutations import EntityMutation, CreateEntityMutation, DeleteEntityMutation, \
         UpdateEntityMutation
 
@@ -22,7 +24,7 @@ from .util import ClassAttr, as_object
 
 # TODO metaclass instead of decorator ?
 
-
+from pony_graphql.ast_aware import QueryBuilder
 
 def generate_schema(db):  
     _types = {}
@@ -106,6 +108,7 @@ class Query(Type):
         qu.field_types = {}
         for name, entity in db.entities.items():
             typ = EntityConnectionType(entity, types_dict)
+            typ.__is_root__ = True
             qu.field_types[typ.name] = typ.make_field()
         return qu
 
@@ -239,14 +242,17 @@ class EntityType(Type):
 
 class EntitySetType(EntityType):
 
-    def get_order_by(self):
-        return self.entity._pk_
+    @cached_property
+    def order_by(self):
+        return lambda: x.id
 
     arguments = {}
 
+    resolver = None
+
     def make_field(self, resolver=None):
         typ = self.as_graphql()
-        return GraphQLField(typ, args=self.arguments, resolver=self)
+        return GraphQLField(typ, args=self.arguments, resolver=self.resolver)
 
     def as_input(self):
         entity_input = EntityType.as_input(self)
@@ -256,26 +262,16 @@ class EntitySetType(EntityType):
         entity_type = EntityType.as_graphql(self)
         return GraphQLList(entity_type)
     
-    def get_query(self, paths, obj, **kwargs):
-        assert not hasattr(self, 'attr')
-        ret = []
-        for path in paths:
-            if not path:
-                continue
-            path = ['x'] + path
-            ret.append(
-                '.'.join(path)
-            )
-        ifs = '...'
-        query = '''
-        %(selects)s
-        for x in %(entity)s
-        %(ifs)s
-        ''' % {
-            'selects': ret,
-            'entity': self.entity,
-            'ifs': ifs
-        }
+    # def get_query(self, paths, obj, **kwargs):
+    #     # ?
+    #     assert not hasattr(self, 'attr')
+    #     builder = self.QueryBuilder(
+    #         entity=self.entity,
+    #         paths=paths,
+    #         ifs=kwargs['ifs'],
+    #         fors=kwargs['fors'],
+    #     )
+    #     return builder.query
         
     
     # def get_query(self, obj, order_by=None, **kwargs):
@@ -288,10 +284,10 @@ class EntitySetType(EntityType):
     #         order_by = self.get_order_by()
     #     return query.order_by(order_by)
     
-    def __call__(self, obj, kwargs, info):
-        # if ...
-        query = self.get_query(obj, **kwargs)
-        return list(query)
+    # def __call__(self, obj, kwargs, info):
+    #     # if ...
+    #     query = self.get_query(obj, **kwargs)
+    #     return list(query)
         
 
 
@@ -310,6 +306,8 @@ class PageInfoType(Type):
         })
         self.types_dict[self.name] = typ
         return typ
+
+
 
 
 class EntityConnectionType(EntitySetType):
@@ -334,6 +332,21 @@ class EntityConnectionType(EntitySetType):
     def make_field_types(self):
         if self.field_types is None:
             self.field_types = dict(self.get_field_types())
+
+
+    def QueryBuilder(self, *args, **kw):
+        inst = QueryBuilder(*args, **kw)
+        inst.entity_type = self
+        return inst
+
+    __is_root__ = False
+    
+    @property
+    def resolver(self):
+        if self.__is_root__:
+            return self
+        return None
+
 
     # FIXME
     # @property
@@ -366,6 +379,9 @@ class EntityConnectionType(EntitySetType):
         'after': GraphQLArgument(GraphQLString),
         'first': GraphQLArgument(GraphQLInt),
         'last': GraphQLArgument(GraphQLInt),
+        
+        'ifs': GraphQLArgument(GraphQLString),
+        'fors': GraphQLArgument(GraphQLString),
     }
     
     def get_child_type(self, field_name):
@@ -388,24 +404,32 @@ class EntityConnectionType(EntitySetType):
                 seen.add(obj)
             elif obj is None:
                 break
-            
-        
+    
     
     def __call__(self, obj, kwargs, info):
-        # ast - ?
         from .ast_aware import AstTraverser
-        import ipdb
-        with ipdb.launch_ipdb_on_exception():
-            tra = AstTraverser(info)
-            pony = []
-            for chain in tra:
-                pony_ch = list(self.get_pony_chain(chain))
-                pony.append(pony_ch)
-            print('Pony AST: %s' % pony)
-            # make query
-            return
-        query = self.get_query(paths, obj, **kwargs)
+        tra = AstTraverser(info)
+        select_paths = [
+            ['id'],
+        ]
+        for chain in tra:
+            chain = list(self.get_pony_chain(chain))
+            select_paths.append(chain)
+        # query = self.get_query(paths, obj, **kwargs)
+        
+        
+        builder = self.QueryBuilder(
+            entity=self.entity,
+            paths=select_paths,
+            ifs=kwargs.get('ifs'),
+            fors=kwargs.get('fors'),
+        )
+        query = builder.query
         page = self.paginate_query(query, **kwargs)
+        page = [
+            builder._parse_result(result)
+            for result in page
+        ]
         edges = []
         for index, obj in enumerate(page):
             edges.append(as_object({
@@ -414,8 +438,8 @@ class EntityConnectionType(EntitySetType):
             }))
         
         get_id = lambda index: int(edges[index].cursor)
-        has_next = edges and query.filter(lambda e: e.id > get_id(-1)).exists()
-        has_prev = edges and query.filter(lambda e: e.id < get_id(0)).exists()
+        has_next = edges and query.filter(lambda: x.id > get_id(-1)).exists()
+        has_prev = edges and query.filter(lambda: x.id < get_id(0)).exists()
         
         return as_object({
             'pageInfo': as_object({
@@ -423,16 +447,16 @@ class EntityConnectionType(EntitySetType):
                 'hasPreviousPage': has_prev,
             }),
             'edges': edges,
-            'items': lambda: [e.node for e in edges],
+            'items': lambda: [e.node for e in edges]
         })
     
     def paginate_query(self, query, **kwargs):
         if 'before' in kwargs or 'last' in kwargs:
             cursor = kwargs.get('before')
             limit = kwargs.get('last')
-            filter = lambda e: e.id < cursor
+            filter = lambda: x.id < cursor
         else:
-            filter = lambda e: e.id > cursor
+            filter = lambda: x.id > cursor
             cursor = kwargs.get('after')
             limit = kwargs.get('first')
 
@@ -446,10 +470,32 @@ class EntityConnectionType(EntitySetType):
     
     def get_query(self, obj, order_by=None, **kwargs):
         # TODO forbid presence of both before and after in kwargs
-        order_by = order_by or self.get_order_by()
+        # TODO order_by
+        order_by = order_by or self.order_by
         if 'before' in kwargs or 'last' in kwargs:
-            order_by = order_by.desc()
+            order_by = lambda: orm.desc(x.id)
         return EntitySetType.get_query(self, obj, order_by=order_by, **kwargs)        
+
+
+class QueryResult(object):
+    # Tree ?
+
+    def __init__(self, entity, types_dict, result, **kw):
+        self.entity = entity
+        self.types_dict = types_dict
+        self.result = result
+        self.__dict__.update(kw)
+
+    @property
+    def items(self):
+        return [e.node for e in self.edges]
+    
+    @property
+    def entity_type(self):
+        1
+    
+    def __getattr__(self, key):
+        ret = getattr(self.result, key)
 
 
 @Type.register(int)
