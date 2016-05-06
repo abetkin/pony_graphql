@@ -3,7 +3,6 @@
 
 
 from flask import Flask
-from flask.ext.cors import CORS
 from flask_graphql import GraphQL
 
 from schema import schema, orm
@@ -28,7 +27,6 @@ class PonyMiddleware(object):
 executor = Executor([PonyMiddleware()])
 graphql = GraphQL(app, schema=schema, executor=executor)
 
-CORS(app)
 
 
 

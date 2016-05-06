@@ -44,30 +44,7 @@ class AstTraverser(object):
 
 import os
 
-
-class Tree(dict):
-
-    def __init__(self, *args, **kw):
-        dict.__init__(self, *args, **kw)
-        self.__dict__ = self
-
-    def __contains__(self, key):
-        return dict.__contains__(self, key)
-        
-
-    def new(self, key):
-        new = self.__class__()
-        new.entity_type = self.entity_type
-        
-        field = self.entity_type.field_types[key]
-        from _types import EntitySetType
-        if isinstance(field, EntitySetType):
-            # import ipdb; ipdb.set_trace()
-            new = new.Connection
-        return new
-
-    @cached_property
-    class Connection(object):
+class Connection(object):
     
         def __init__(self, wrapped):
             self.wrapped = wrapped
@@ -94,8 +71,54 @@ class Tree(dict):
                 for e in self.wrapped
             ]
         
+
+
+class Tree(dict):
+
+    def __init__(self, *args, **kw):
+        dict.__init__(self, *args, **kw)
+        self.__dict__ = self
+
+    def __contains__(self, key):
+        return dict.__contains__(self, key)
         
 
+    def new(self, key):
+        new = self.__class__()
+        new.entity_type = self.entity_type
+        
+        field = self.entity_type.field_types[key]
+        from _types import EntitySetType
+        if isinstance(field, EntitySetType):
+            # import ipdb; ipdb.set_trace()
+            new = new.Connection
+        return new
+
+    # Connection = cached_property(Connection)
+    
+    def Connection(self, *ar, **kw):
+        1
+
+    @classmethod
+    def from_select(cls, paths, values):
+        key = 'id'
+
+
+    def update_from(self, paths, values):
+        '''
+        collect by key
+        pass list forward
+        '''
+        # TODO
+        tree = combine(paths)
+        trees = [tree]
+        # tree -> values
+        parse(tree, values) -> [(tree, values)]
+            
+
+        for path, val in zip(self.paths, values):
+            ret.set_at(path, val)
+        return ret
 
     def set_at(self, path, value):
         obj = self
@@ -189,6 +212,7 @@ class QueryBuilder(object):
     def _parse_result(self, values):
         # FIXME group_by id
         ret = self.Tree()
+        # Tree.set(paths, values)
         for path, val in zip(self.paths, values):
             ret.set_at(path, val)
         return ret
