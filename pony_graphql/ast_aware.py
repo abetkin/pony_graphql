@@ -110,10 +110,13 @@ class Tree(dict):
         pass list forward
         '''
         # TODO
-        tree = combine(paths)
-        trees = [tree]
-        # tree -> values
-        parse(tree, values) -> [(tree, values)]
+        # tree = combine(paths)
+        # trees = [tree]
+        # # tree -> values
+        # parse(tree, values) -> [(tree, values)]
+        
+        
+        # !! store paths, vals 
             
 
         for path, val in zip(self.paths, values):
