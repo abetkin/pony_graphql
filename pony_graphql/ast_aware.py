@@ -46,31 +46,31 @@ import os
 
 class Connection(object):
     
-        def __init__(self, wrapped):
-            self.wrapped = wrapped
-        
-        # def __setitem__(self, key, value):
-        #     return getattr(self.wrapped, key)
-        
-        def __repr__(self):
-            return 'Connection: %s' % self.wrapped
-        
-        @property
-        def items(self):
-            import ipdb; ipdb.set_trace()
-            return list(self.wrapped)
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+    
+    # def __setitem__(self, key, value):
+    #     return getattr(self.wrapped, key)
+    
+    def __repr__(self):
+        return 'Connection: %s' % self.wrapped
+    
+    @property
+    def items(self):
+        import ipdb; ipdb.set_trace()
+        return list(self.wrapped)
 
-        @property
-        def __setitem__(self):
-            return self.wrapped.__setitem__
-        
-        @property
-        def edges(self):
-            return [
-                as_object({node: e})
-                for e in self.wrapped
-            ]
-        
+    @property
+    def __setitem__(self):
+        return self.wrapped.__setitem__
+    
+    @property
+    def edges(self):
+        return [
+            as_object({node: e})
+            for e in self.wrapped
+        ]
+    
 
 
 class Tree(dict):
@@ -219,3 +219,105 @@ class QueryBuilder(object):
         for path, val in zip(self.paths, values):
             ret.set_at(path, val)
         return ret
+
+
+class ResultParser(object):
+    def __init__(self, paths, values):
+        self.paths = paths
+        self.values = values
+
+    def Path(self):
+        1
+
+    def parse(self):
+        vals = iter(values)
+        result = {}
+        
+        Path([], self.paths, values)
+        
+        for values in _values:
+            for listener in self.iteration_listeners:
+                listener(values)
+
+
+class PathTree(dict):
+
+    def from_path(self, path):
+        ret = {}
+        obj = ret
+        p = []
+        for i, key in enumerate(path):
+            if key == 'genres':
+                import ipdb; ipdb.set_trace()
+            p = p + [key]
+            if i < len(path) - 1:
+                val = self.new(p)
+            else:
+                val = Path(self.parent, p)
+            obj[key] = val
+            obj = obj[key]
+            
+        return ret
+            
+
+    def __init__(self, parent, paths=()):
+        self.parent = parent
+        for path in paths:
+            d = self.from_path(path)
+            self.update(d) # TODO corner cases ?
+    
+    # @property
+    # def paths(self):
+    #     return self.parent.paths
+        
+    @property
+    def entity_type(self):
+        return self.parent.entity_type
+
+
+    def __getattr__(self, key):
+        return self.__getitem__(key)
+    
+    def new(self, path):
+        from _types import EntitySetType
+        if self._is_list_type(path):
+            return List(self.parent, path)
+        return Path(self.parent, path)
+    
+    def _is_list_type(self, path):
+        path = tuple(path)
+        HACK = {
+            ('genres',): True
+        }
+        # obj = self.entity_type
+        # for key in path:
+        #     obj.make_field_types()
+        #     obj = obj.field_types[key]
+        # return obj
+        return HACK.get(path)
+    
+
+    # @cached_property
+    # def notify_eval(self):
+    #     return []
+    
+    # def _eval(self, values):
+    
+    #     # return lazy
+    
+    #     ind = self.paths.index(self.path) # FIXME
+    #     return values[ind]
+
+
+class Path(object):
+    def __init__(self, parent, path):
+        self.parent = parent
+        self.path = path
+
+class List(list):
+
+    def __init__(self, parent, path):
+        list.__init__(self)
+        self.parent = parent
+        self.path = path
+    

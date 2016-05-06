@@ -21,3 +21,13 @@ mutation {
 }
 
 
+------------
+
+AST
+
+0. PathHelper: tree, try navigate paths
+    list | leaf path
+    wrap into a list
+1. Created Path's, List's, main List
+2. iterate through values
+3. navigate thru pathhelpers

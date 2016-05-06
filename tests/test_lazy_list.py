@@ -22,6 +22,8 @@ class mydict(object):
 
     def __getattr__(self, key):
         self.log('getattr %s' % key)
+        if key == 'this':
+            return self
         return self.wrapped[key]
 
     def __repr__(self):
@@ -76,7 +78,8 @@ class Test(unittest.TestCase):
     def setUp(self):
         ItemType = GraphQLObjectType(
             name='Item',
-            fields={
+            fields=lambda: {
+                'this': GraphQLField(ItemType),
                 'name': GraphQLField(GraphQLString),
             },
         )
@@ -109,7 +112,7 @@ class Test(unittest.TestCase):
     query = '''
     {
         items {
-            name
+            this { name }
         }
     }
     '''
@@ -120,7 +123,9 @@ class Test(unittest.TestCase):
         self.assertFalse(result.errors)
         self.assertListEqual(self.logger, [
             "__iter__ {'name': 'A'}",
+            'getattr this',
             'getattr name',
             "__iter__ {'name': 'B'}",
-            'getattr name'
+            'getattr this',
+            'getattr name',
         ])
