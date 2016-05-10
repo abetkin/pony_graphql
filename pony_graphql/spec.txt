@@ -31,3 +31,26 @@ AST
 1. Created Path's, List's, main List
 2. iterate through values
 3. navigate thru pathhelpers
+
+list: contains absolute paths, path is owned by list
+
+listeners: [l1, l2]
+
+{
+    id (pk)
+    genres {alias}
+    hobbies {descr}
+}
+
+[(1, 'pop', 'dancing'), (1, 'jazz', 'dancing'), (2, 'rock', 'smoking'), ...]
+
+{
+    id: 1,
+    genres: ['pop', 'jazz'],
+    hobbies: ['dancing']
+}, 
+{
+    id: 2,
+    genres: ['rock'],
+    hobbies: ['smoking']
+}, 

@@ -8,7 +8,7 @@ class ClassAttr(object):
     def __init__(self, attr_name):
         self.attr_name = attr_name
     
-    def __get__(self, isinstance, owner):
+    def __get__(self, instance, owner):
         return getattr(owner, self.attr_name)
 
 
@@ -32,6 +32,18 @@ class as_object(object):
         
     def __repr__(self):
         return repr(self.__dict__)
+
+from functools import partial
+
+class PassSelf(object):
+    def __init__(self, callabl):
+        self.callabl = callabl
+    
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return partial(self.callabl, instance)
+
 
 
 from datetime import datetime, timedelta, tzinfo

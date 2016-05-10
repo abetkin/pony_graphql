@@ -3,7 +3,7 @@ import collections
 from pony import orm, py23compat as compat
 from graphql.core.execution.base import collect_fields
 # from . import _types
-from .util import ClassAttr, as_object
+from .util import ClassAttr, as_object, PassSelf
 
 from cached_property import cached_property
 
@@ -221,34 +221,35 @@ class QueryBuilder(object):
         return ret
 
 
-class ResultParser(object):
-    def __init__(self, paths, values):
-        self.paths = paths
-        self.values = values
+# class ResultParser(object):
+#     def __init__(self, paths, values):
+#         self.paths = paths
+#         self.values = values
 
-    def Path(self):
-        1
-
-    def parse(self):
-        vals = iter(values)
-        result = {}
+#     def parse(self):
+#         vals = iter(values)
+#         result = {}
         
-        Path([], self.paths, values)
+#         Path([], self.paths, values)
         
-        for values in _values:
-            for listener in self.iteration_listeners:
-                listener(values)
+#         for values in _values:
+#             for listener in self.iteration_listeners:
+#                 listener(values)
 
 
 class PathTree(dict):
 
-    def from_path(self, path):
+    _list = None
+    
+    paths = None
+
+    def _from_path(self, path):
         ret = {}
         obj = ret
         p = []
         for i, key in enumerate(path):
-            if key == 'genres':
-                import ipdb; ipdb.set_trace()
+            # if key == 'genres':
+            #     import ipdb; ipdb.set_trace()
             p = p + [key]
             if i < len(path) - 1:
                 val = self.new(p)
@@ -260,15 +261,24 @@ class PathTree(dict):
         return ret
             
 
-    def __init__(self, parent, paths=()):
+    def __init__(self, paths, parent):
         self.parent = parent
         for path in paths:
-            d = self.from_path(path)
+            d = self._from_path(path)
             self.update(d) # TODO corner cases ?
     
-    # @property
-    # def paths(self):
-    #     return self.parent.paths
+    def iterate_through(self, values):
+        # preprocess
+        for tupl in values:
+            for p, value in zip(self.paths, tupl):
+                if p.preprocessing:
+                    p.on_value_pre(value)
+            
+        for tupl in values:
+            result = []
+            for p, value in zip(self.paths, tupl):
+                p.on_value(value)
+            yield self.instantiate(result)
         
     @property
     def entity_type(self):
@@ -277,6 +287,19 @@ class PathTree(dict):
 
     def __getattr__(self, key):
         return self.__getitem__(key)
+    
+    @PassSelf
+    class instantiate(object):
+        def __init__(self, tree, values):
+            self.tree = tree
+            self.values = values
+        
+        def __getattr__(self, key):
+            ret = self.__getitem__(key)
+            if not isinstance(ret, Path):
+                return ret
+            return self.values[ret.index]
+    
     
     def new(self, path):
         from _types import EntitySetType
@@ -308,16 +331,50 @@ class PathTree(dict):
     #     ind = self.paths.index(self.path) # FIXME
     #     return values[ind]
 
+    def __getattr__(self, attr):
+        'gen.send(pk, value)'
 
-class Path(object):
-    def __init__(self, parent, path):
-        self.parent = parent
-        self.path = path
 
-class List(list):
+class Path(tuple):
+    # not a listener for preproc.
+    preprocessing = False
 
-    def __init__(self, parent, path):
-        list.__init__(self)
-        self.parent = parent
-        self.path = path
+    index = None
     
+    def __init__(self, index, *args, **kw):
+        tuple.__init__(*args, **kw)
+        self.index = index
+    
+
+    def on_value(self, value):
+        return value
+
+
+# class PathList(list):
+#     '{path: list of values}'
+
+#     def __init__(self, parent, path):
+#         list.__init__(self)
+#         self.parent = parent
+#         self.path = path
+    
+
+#     def on_value(*tupl):
+#         'get n-th'
+
+
+class ListPath(Path):
+    'with multiple values'
+    
+    preprocessing = True
+    
+    data = {}
+    
+    def on_value_pre(self, pk, value):
+        li = data.setdefault(pk, [])
+        li.append(value)
+    
+    def on_value(self, pk, value):
+        ret = data[pk]
+        assert value in ret
+        return ret
