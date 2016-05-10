@@ -198,17 +198,19 @@ class PathTree(dict):
             d[path[-1]] = value
         if not filter_list_paths:
             return root
-        list_values = zip(*list_values)
+        # list_values = zip(*list_values)
         
         list_roots = {}
+        list_vals = {}
         
-        for p in list_paths:
+        for p, val in zip(list_paths, list_values):
             list_roots.setdefault(p.list_root, []).append(p.path)
+            list_vals.setdefault(p.list_root, []).append(val)
         
         
         def relative(path1, path2):
             return path1[len(path2):]
-        
+        # import ipdb; ipdb.set_trace()
         for list_root in list_roots:
             obj_list = []
             lpaths = list_roots[list_root]
@@ -216,7 +218,9 @@ class PathTree(dict):
                 relative(lp, list_root)
                 for lp in lpaths
             ]
-            for vals in list_values:
+            lvals = list_vals[list_root]
+            lvals = zip(*lvals)
+            for vals in lvals:
                 obj = self.instantiate(vals, lpaths, False)
                 obj_list.append(obj)
             d = root._get_path(list_root[:-1])
