@@ -42,10 +42,70 @@ class Test(unittest.TestCase):
             ]
             tree = PathTree.from_paths(paths, parent=parent)
             objects = tree.iterate_through(items)
-            ipdb.set_trace()
-            ret = list(objects)
+            self.assertEqual(
+                list(objects),
+                [
+                    {
+                        'genres': {'name': {'rock', 'pop'}},
+                        'id': 1,
+                        'name': 'Sting'
+                    },
+                    {
+                        'genres': {'name': {'jazz'}},
+                        'id': 2,
+                        'name': 'Django'
+                    }
+                ]
+            )
             
-            print(ret)
+
+    def test2(self):
+        from pony_graphql._types import Query
+        # Artist = Query.instance.types_dict['Artist']
+    
+        class parent:
+            _d = {}
+            artist = EntityConnectionType(self.db.Artist, _d)
+            genre = EntityConnectionType(self.db.Genre, _d)
+            hobby = EntityConnectionType(self.db.Hobby, _d)
+            artist.as_graphql()
+            genre.as_graphql()
+            hobby.as_graphql()
+            
+            entity_type = artist
+            
+            
+        paths = [
+            ['id'],
+            ['genres', 'name'],
+            ['hobbies', 'name'],
+        ]
+        
+        import ipdb
+        with ipdb.launch_ipdb_on_exception():
+            items = [
+                (1, 'rock', 'sport'),
+                (1, 'pop', 'movies'),
+                (2, 'jazz', 'music'),
+                (2, 'jazz', 'movies'),
+            ]
+            tree = PathTree.from_paths(paths, parent=parent)
+            objects = tree.iterate_through(items)
+            self.assertEqual(
+                list(objects), 
+                    [
+                    {
+                        'genres': {'name': {'pop', 'rock'}},
+                        'id': 1,
+                        'hobbies': {'name': {'movies', 'sport'}},
+                    },
+                    {
+                        'genres': {'name': {'jazz'}},
+                        'id': 2,
+                        'hobbies': {'name': {'movies', 'music'}}
+                    },
+                ]
+            )
         
     
     db_name = 'test_pathtree.db'
@@ -68,9 +128,14 @@ class Test(unittest.TestCase):
             name = orm.Required(str)
             artists = orm.Set('Artist')
         
+        class Hobby(db.Entity):
+            name = orm.Required(str)
+            artists = orm.Set('Artist')
+        
         class Artist(db.Entity):
             name = orm.Required(str)
             age = orm.Optional(int)
+            hobbies = orm.Set(Hobby)
             genres = orm.Set(Genre)
 
         

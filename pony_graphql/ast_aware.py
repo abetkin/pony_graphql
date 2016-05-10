@@ -224,23 +224,15 @@ class PathTree(dict):
     def _is_list_type(self, path):
         path = tuple(path)
         HACK = {
-            ('genres', 'name'): True
+            ('genres', 'name'): True,
+            ('hobbies', 'name'): True,
         }
-        # obj = self.entity_type
-        # for key in path:
-        #     obj.make_field_types()
-        #     obj = obj.field_types[key]
-        # return obj
-        print(path, HACK.get(path))
         return HACK.get(path)
 
 
 class Path(tuple):
-    # not a listener for preproc.
     preprocessing = False
 
-    index = None
-    
     def __new__(cls, *args, **kw):
         kw.pop('index')
         return tuple.__new__(cls, *args, **kw)
@@ -250,9 +242,8 @@ class Path(tuple):
         tuple.__init__(self, *args, **kw)
         
     
-
+    # TODO gen?
     def on_value(self, pk, value):
-        print 'on_value', pk, value
         return value
 
 
@@ -261,11 +252,12 @@ class ListPath(Path):
     
     preprocessing = True
     
-    data = {}
+    @cached_property
+    def data(self): return {}
     
     def on_value_pre(self, pk, value):
-        li = self.data.setdefault(pk, [])
-        li.append(value)
+        values = self.data.setdefault(pk, set())
+        values.add(value)
     
     def on_value(self, pk, value):
         ret = self.data[pk]
