@@ -26,8 +26,9 @@ from .util import ClassAttr, as_object
 
 from pony_graphql.ast_aware import QueryBuilder
 
-def generate_schema(db):  
-    _types = {}
+def generate_schema(db, _types=None):
+    if _types is None:
+        _types = {}
     query = Query.from_db(db, _types)
     mut = Mutation.from_db(db, _types)
     return GraphQLSchema(query=query.as_graphql(), mutation=mut.as_graphql())
@@ -109,11 +110,18 @@ class Query(Type):
         for name, entity in db.entities.items():
             typ = EntityConnectionType(entity, types_dict)
             typ.__is_root__ = True
-            qu.field_types[typ.name] = typ.make_field()
+            # FIXME fields
+            qu.field_types[typ.name] = typ
         return qu
 
     def as_graphql(self):
-        return GraphQLObjectType(name=self.name, fields=self.field_types)
+    
+        def get_fields():
+            return {
+                name: typ.make_field()
+                for name, typ in self.field_types.items()
+            }
+        return GraphQLObjectType(name=self.name, fields=get_fields)
 
 
 class Mutation(Type):

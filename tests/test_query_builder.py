@@ -6,9 +6,10 @@ from cached_property import cached_property
 
 import pony
 from pony import orm
-from pony_graphql.ast_aware import QueryBuilder 
+from pony_graphql.ast_aware import QueryBuilder
+from pony_graphql import generate_schema
 
-class QBuilderTest(unittest.TestCase):
+class Test(unittest.TestCase):
     
     db_name = 'test_qbuilder.db'
 
@@ -40,36 +41,54 @@ class QBuilderTest(unittest.TestCase):
     
         pony.options.INNER_JOIN_SYNTAX = True
     
+        generate_schema(self.db)
+    
         # import logging
         # logging.getLogger().setLevel(logging.INFO)
         # orm.sql_debug(True)
     
+    # @cached_property
+    # def types(self):
+    #     types = {}
+    #     # import ipdb; ipdb.set_trace()
+    #     generate_schema(self.db, types)
+    #     return types
+    
     @cached_property
     def qbuilder(self):
-        return QueryBuilder(
+        ret = QueryBuilder(
             entity=self.db.Artist,
             paths=[
                 ['genres', 'name'],
                 ['name'],
             ],
             ifs='x.age < 100')
+        # ret.entity_type = self.types['Artist']
+        return ret
     
-    @cached_property
-    def result(self):
-        return {
-            'name': 'Sia',
-            'genres': {
-                'name': 'pop',
-            },
-        }
+    # @cached_property
+    # def result(self):
+    #     return {
+    #         'name': 'Sia',
+    #         'genres': {
+    #             'name': 'pop',
+    #         },
+    #     }
     
     @orm.db_session
     def test(self):
     
         # TODO pony bug: ['name', 'name'] workaround
-        items = self.qbuilder.make_select()
-        self.assertEqual(len(items), 1)
-        self.assertDictEqual(items[0], self.result)
+        import ipdb
+        with ipdb.launch_ipdb_on_exception():
+            items = self.qbuilder.make_select()
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0], {
+                'name': 'Sia',
+                'genres': [{
+                    'name': 'pop',
+                }],
+            })
     
     # TODO python3
     

@@ -35,43 +35,7 @@ class AstTraverser(object):
 
         
 
-
-# class ConnectionType(_types.EntityConnectionType):
-    
-#     def __call__(self, obj, kwargs, info):
-#         traverser = AstTraverser(info)
-
-
 import os
-
-class Connection(object):
-    
-    def __init__(self, wrapped):
-        self.wrapped = wrapped
-    
-    # def __setitem__(self, key, value):
-    #     return getattr(self.wrapped, key)
-    
-    def __repr__(self):
-        return 'Connection: %s' % self.wrapped
-    
-    @property
-    def items(self):
-        import ipdb; ipdb.set_trace()
-        return list(self.wrapped)
-
-    @property
-    def __setitem__(self):
-        return self.wrapped.__setitem__
-    
-    @property
-    def edges(self):
-        return [
-            as_object({node: e})
-            for e in self.wrapped
-        ]
-    
-
 
 
 class QueryBuilder(object):
@@ -91,13 +55,10 @@ class QueryBuilder(object):
     def query(self):
         return orm.select(repr(self))
 
-    # TODO repr for tree
-    def Tree(self, *args, **kw):
-        inst = Tree(*args, **kw)
-        inst.entity_type = self.entity_type
-        return inst
-        
-        
+    @property
+    def entity_type(self):
+        from pony_graphql._types import Query
+        return Query.instance.field_types[self.entity.__name__]
     
     @property
     def vars(self):
@@ -117,7 +78,7 @@ class QueryBuilder(object):
     
     def make_select(self):
         items = self.query[:]
-        tree = PathTree(parent=self)
+        tree = PathTree.from_paths(self.paths, parent=self)
         objects = tree.iterate_through(items)
         return list(objects)
     
@@ -161,16 +122,26 @@ class PathTree(dict):
             obj = obj[key]
         return obj
     
+    # @cached_property
+    # def list_roots(self): return {}
+    
     def _make_path(self, path, index):
         # and populate self with it
         obj = self._get_path(path[:-1])
         
-        is_list = any(
-            self._is_list_type(path[:i])
-            for i in range(1, len(path) + 1)
-        )
-        cls = ListPath if is_list else Path
-        ret = cls(path, index=index)
+        list_root = None
+        for i in range(1, len(path) + 1):
+            p = path[:i]
+            if self._is_list_type(p):
+                list_root = p
+                break
+        
+        if list_root:
+            # li = List(list_root)
+            # self.list_roots[list_root] = li
+            ret = ListPath(path, list_root=list_root, index=index)
+        else:
+            ret = Path(path, index=index)
         obj[path[-1]] = ret
         return ret
     
@@ -214,11 +185,39 @@ class PathTree(dict):
     def __getattr__(self, key):
         return self.__getitem__(key)
     
-    def instantiate(self, values, paths):
+    def instantiate(self, values, paths, filter_list_paths=True):
         root = self.__class__(parent=self.parent)
+        list_paths = []
+        list_values = []
         for path, value in zip(paths, values):
+            if filter_list_paths and isinstance(path, ListPath):
+                list_paths.append(path)
+                list_values.append(value)
+                continue
             d = root._get_path(path[:-1])
             d[path[-1]] = value
+        if not filter_list_paths:
+            return root
+        list_values = zip(*list_values)
+        
+        list_roots = {}
+        
+        for p in list_paths:
+            list_roots.setdefault(p.list_root, []).append(p.path)
+        
+        
+        
+        
+        for list_root in list_roots:
+            obj_list = []
+            lpaths = list_roots[list_root]
+            for vals in list_values:
+                obj = self.instantiate(vals, list_paths, False)
+                obj_list.append(obj)
+            d = root._get_path(list_root[:-1])
+            d[list_root[-1]] = obj_list
+            
+
         return root
     
 
@@ -232,17 +231,25 @@ class PathTree(dict):
             return True
 
 
-class Path(tuple):
+class Path(object):
     preprocessing = False
 
-    def __new__(cls, *args, **kw):
-        kw.pop('index')
-        return tuple.__new__(cls, *args, **kw)
+    # def __new__(cls, *args, **kw):
+    #     kw.pop('index')
+    #     return tuple.__new__(cls, *args, **kw)
     
-    def __init__(self, *args, **kw):
-        self.index = kw.pop('index')
-        tuple.__init__(self, *args, **kw)
-        
+    def __init__(self, path, index):
+        # self.index = kw.pop('index')
+        self.index = index
+        self.path = tuple(path)
+        # tuple.__init__(self, *args, **kw)
+    
+    def __iter__(self):
+        return iter(self.path)
+    
+    def __getitem__(self, index):
+        return self.path[index]
+    
     def on_value(self, pk, value):
         return value
 
@@ -251,6 +258,10 @@ class ListPath(Path):
     'with multiple values'
     
     preprocessing = True
+    
+    def __init__(self, path, index, list_root):
+        Path.__init__(self, path, index)
+        self.list_root = tuple(list_root)
     
     @cached_property
     def data(self): return {}
@@ -262,4 +273,4 @@ class ListPath(Path):
     def on_value(self, pk, value):
         ret = self.data[pk]
         assert value in ret
-        return ret
+        return list(ret)

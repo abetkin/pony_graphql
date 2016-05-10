@@ -95,14 +95,23 @@ class Test(unittest.TestCase):
                 list(objects), 
                     [
                     {
-                        'genres': {'name': {'pop', 'rock'}},
+                        'genres': [
+                            {'name': 'pop'},
+                            {'name': 'rock'},
+                        ],
                         'id': 1,
-                        'hobbies': {'name': {'movies', 'sport'}},
+                        'hobbies': [
+                            {'name': 'movies'},
+                            {'name': 'sport'},
+                        ],
                     },
                     {
-                        'genres': {'name': {'jazz'}},
+                        'genres': [{'name': 'jazz'}],
                         'id': 2,
-                        'hobbies': {'name': {'movies', 'music'}}
+                        'hobbies': [
+                            {'name': 'movies'},
+                            {'name': 'music'},
+                        ],
                     },
                 ]
             )
