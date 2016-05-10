@@ -91,6 +91,8 @@ class Test(unittest.TestCase):
             ]
             tree = PathTree.from_paths(paths, parent=parent)
             objects = tree.iterate_through(items)
+            result = list(objects)
+            import ipdb; ipdb.set_trace()
             self.assertEqual(
                 list(objects), 
                     [

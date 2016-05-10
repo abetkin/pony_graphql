@@ -206,13 +206,18 @@ class PathTree(dict):
             list_roots.setdefault(p.list_root, []).append(p.path)
         
         
-        
+        def relative(path1, path2):
+            return path1[len(path2):]
         
         for list_root in list_roots:
             obj_list = []
             lpaths = list_roots[list_root]
+            lpaths = [
+                relative(lp, list_root)
+                for lp in lpaths
+            ]
             for vals in list_values:
-                obj = self.instantiate(vals, list_paths, False)
+                obj = self.instantiate(vals, lpaths, False)
                 obj_list.append(obj)
             d = root._get_path(list_root[:-1])
             d[list_root[-1]] = obj_list
