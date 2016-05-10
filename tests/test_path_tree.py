@@ -27,15 +27,25 @@ class Test(unittest.TestCase):
             entity_type = artist
             
             
-            paths = [
-                ['genres', 'name'],
-                ['name'],
-            ]
+        paths = [
+            ['id'],
+            ['genres', 'name'],
+            ['name'],
+        ]
+        
         import ipdb
         with ipdb.launch_ipdb_on_exception():
-            pt = PathTree(parent, parent.paths)
-            # import ipdb; ipdb.set_trace()
-            print(pt)
+            items = [
+                (1, 'rock', 'Sting'),
+                (1, 'pop', 'Sting'),
+                (2, 'jazz', 'Django'),
+            ]
+            tree = PathTree.from_paths(paths, parent=parent)
+            objects = tree.iterate_through(items)
+            ipdb.set_trace()
+            ret = list(objects)
+            
+            print(ret)
         
     
     db_name = 'test_pathtree.db'

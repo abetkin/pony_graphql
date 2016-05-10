@@ -73,72 +73,6 @@ class Connection(object):
     
 
 
-class Tree(dict):
-
-    def __init__(self, *args, **kw):
-        dict.__init__(self, *args, **kw)
-        self.__dict__ = self
-
-    def __contains__(self, key):
-        return dict.__contains__(self, key)
-        
-
-    def new(self, key):
-        new = self.__class__()
-        new.entity_type = self.entity_type
-        
-        field = self.entity_type.field_types[key]
-        from _types import EntitySetType
-        if isinstance(field, EntitySetType):
-            # import ipdb; ipdb.set_trace()
-            new = new.Connection
-        return new
-
-    # Connection = cached_property(Connection)
-    
-    def Connection(self, *ar, **kw):
-        1
-
-    @classmethod
-    def from_select(cls, paths, values):
-        key = 'id'
-
-
-    def update_from(self, paths, values):
-        '''
-        collect by key
-        pass list forward
-        '''
-        # TODO
-        # tree = combine(paths)
-        # trees = [tree]
-        # # tree -> values
-        # parse(tree, values) -> [(tree, values)]
-        
-        
-        # !! store paths, vals 
-            
-
-        for path, val in zip(self.paths, values):
-            ret.set_at(path, val)
-        return ret
-
-    def set_at(self, path, value):
-        obj = self
-        for key in path[:-1]:
-            if key not in obj:
-                new = obj.new(key)
-                obj[key] = new
-            obj = obj[key]
-                
-        # import ipdb; ipdb.set_trace()
-        self[path[-1]] = value
-    
-    # def 
-    
-
-
-
 
 class QueryBuilder(object):
     
@@ -183,7 +117,9 @@ class QueryBuilder(object):
     
     def make_select(self):
         items = self.query[:]
-        return [self._parse_result(values) for values in items]
+        tree = PathTree(parent=self)
+        objects = tree.iterate_through(items)
+        return list(objects)
     
     def get_paths(self):
         ret = []
@@ -211,74 +147,63 @@ class QueryBuilder(object):
         return ' '.join([
             'for x in self.entity'
         ])
-    
-    def _parse_result(self, values):
-        # FIXME group_by id
-        ret = self.Tree()
-        # Tree.set(paths, values)
-        for path, val in zip(self.paths, values):
-            ret.set_at(path, val)
-        return ret
-
-
-# class ResultParser(object):
-#     def __init__(self, paths, values):
-#         self.paths = paths
-#         self.values = values
-
-#     def parse(self):
-#         vals = iter(values)
-#         result = {}
-        
-#         Path([], self.paths, values)
-        
-#         for values in _values:
-#             for listener in self.iteration_listeners:
-#                 listener(values)
 
 
 class PathTree(dict):
 
-    _list = None
-    
     paths = None
-
-    def _from_path(self, path):
-        ret = {}
-        obj = ret
-        p = []
-        for i, key in enumerate(path):
-            # if key == 'genres':
-            #     import ipdb; ipdb.set_trace()
-            p = p + [key]
-            if i < len(path) - 1:
-                val = self.new(p)
-            else:
-                val = Path(self.parent, p)
-            obj[key] = val
+    
+    def _get_path(self, path):
+        obj = self
+        for key in path:
+            if key not in obj:
+                obj[key] = self.__class__(parent=self.parent)
             obj = obj[key]
-            
+        return obj
+    
+    def _make_path(self, path, index):
+        # and populate self with it
+        obj = self._get_path(path[:-1])
+        
+        is_list = any(
+            self._is_list_type(path[:i])
+            for i in range(1, len(path) + 1)
+        )
+        cls = ListPath if is_list else Path
+        ret = cls(path, index=index)
+        obj[path[-1]] = ret
         return ret
-            
+    
+    @classmethod
+    def from_paths(cls, paths, parent):
+        root = cls(parent=parent)
+        root.paths = []
+        for i, p in enumerate(paths):
+            path = root._make_path(p, i)
+            root.paths.append(path)
+        return root
 
-    def __init__(self, paths, parent):
+    def __init__(self, parent):
         self.parent = parent
-        for path in paths:
-            d = self._from_path(path)
-            self.update(d) # TODO corner cases ?
     
     def iterate_through(self, values):
         # preprocess
         for tupl in values:
+            pk = tupl[0]
             for p, value in zip(self.paths, tupl):
                 if p.preprocessing:
-                    p.on_value_pre(value)
-            
+                    p.on_value_pre(pk, value)
+        instantiated = set()
         for tupl in values:
             result = []
+            pk = tupl[0]
             for p, value in zip(self.paths, tupl):
-                p.on_value(value)
-            yield self.instantiate(result)
+                result.append(
+                    p.on_value(pk, value)
+                )
+            if pk not in instantiated:
+                yield self.instantiate(result, self.paths)
+                instantiated.add(pk)
         
     @property
     def entity_type(self):
@@ -288,51 +213,26 @@ class PathTree(dict):
     def __getattr__(self, key):
         return self.__getitem__(key)
     
-    @PassSelf
-    class instantiate(object):
-        def __init__(self, tree, values):
-            self.tree = tree
-            self.values = values
-        
-        def __getattr__(self, key):
-            ret = self.__getitem__(key)
-            if not isinstance(ret, Path):
-                return ret
-            return self.values[ret.index]
+    def instantiate(self, values, paths):
+        root = self.__class__(parent=self.parent)
+        for path, value in zip(paths, values):
+            d = root._get_path(path[:-1])
+            d[path[-1]] = value
+        return root
     
-    
-    def new(self, path):
-        from _types import EntitySetType
-        if self._is_list_type(path):
-            return List(self.parent, path)
-        return Path(self.parent, path)
-    
+
     def _is_list_type(self, path):
         path = tuple(path)
         HACK = {
-            ('genres',): True
+            ('genres', 'name'): True
         }
         # obj = self.entity_type
         # for key in path:
         #     obj.make_field_types()
         #     obj = obj.field_types[key]
         # return obj
+        print(path, HACK.get(path))
         return HACK.get(path)
-    
-
-    # @cached_property
-    # def notify_eval(self):
-    #     return []
-    
-    # def _eval(self, values):
-    
-    #     # return lazy
-    
-    #     ind = self.paths.index(self.path) # FIXME
-    #     return values[ind]
-
-    def __getattr__(self, attr):
-        'gen.send(pk, value)'
 
 
 class Path(tuple):
@@ -341,26 +241,19 @@ class Path(tuple):
 
     index = None
     
-    def __init__(self, index, *args, **kw):
-        tuple.__init__(*args, **kw)
-        self.index = index
+    def __new__(cls, *args, **kw):
+        kw.pop('index')
+        return tuple.__new__(cls, *args, **kw)
+    
+    def __init__(self, *args, **kw):
+        self.index = kw.pop('index')
+        tuple.__init__(self, *args, **kw)
+        
     
 
-    def on_value(self, value):
+    def on_value(self, pk, value):
+        print 'on_value', pk, value
         return value
-
-
-# class PathList(list):
-#     '{path: list of values}'
-
-#     def __init__(self, parent, path):
-#         list.__init__(self)
-#         self.parent = parent
-#         self.path = path
-    
-
-#     def on_value(*tupl):
-#         'get n-th'
 
 
 class ListPath(Path):
@@ -371,10 +264,10 @@ class ListPath(Path):
     data = {}
     
     def on_value_pre(self, pk, value):
-        li = data.setdefault(pk, [])
+        li = self.data.setdefault(pk, [])
         li.append(value)
     
     def on_value(self, pk, value):
-        ret = data[pk]
+        ret = self.data[pk]
         assert value in ret
         return ret
