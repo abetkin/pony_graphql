@@ -193,6 +193,7 @@ class PathTree(dict):
             for p, value in zip(self.paths, tupl):
                 if p.preprocessing:
                     p.on_value_pre(pk, value)
+        # instantiate objects
         instantiated = set()
         for tupl in values:
             result = []
@@ -222,12 +223,13 @@ class PathTree(dict):
     
 
     def _is_list_type(self, path):
-        path = tuple(path)
-        HACK = {
-            ('genres', 'name'): True,
-            ('hobbies', 'name'): True,
-        }
-        return HACK.get(path)
+        typ = self.entity_type
+        for key in path:
+            typ.make_field_types()
+            typ = typ.field_types[key]
+        from pony_graphql._types import EntitySetType
+        if isinstance(typ, EntitySetType):
+            return True
 
 
 class Path(tuple):
@@ -241,8 +243,6 @@ class Path(tuple):
         self.index = kw.pop('index')
         tuple.__init__(self, *args, **kw)
         
-    
-    # TODO gen?
     def on_value(self, pk, value):
         return value
 
