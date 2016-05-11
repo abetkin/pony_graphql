@@ -210,7 +210,7 @@ class PathTree(dict):
         
         def relative(path1, path2):
             return path1[len(path2):]
-        # import ipdb; ipdb.set_trace()
+
         for list_root in list_roots:
             obj_list = []
             lpaths = list_roots[list_root]

@@ -43,37 +43,18 @@ class Test(unittest.TestCase):
     
         generate_schema(self.db)
     
-        # import logging
-        # logging.getLogger().setLevel(logging.INFO)
-        # orm.sql_debug(True)
-    
-    # @cached_property
-    # def types(self):
-    #     types = {}
-    #     # import ipdb; ipdb.set_trace()
-    #     generate_schema(self.db, types)
-    #     return types
     
     @cached_property
     def qbuilder(self):
-        ret = QueryBuilder(
+        return QueryBuilder(
             entity=self.db.Artist,
             paths=[
+                ['id'],
                 ['genres', 'name'],
                 ['name'],
             ],
             ifs='x.age < 100')
-        # ret.entity_type = self.types['Artist']
-        return ret
-    
-    # @cached_property
-    # def result(self):
-    #     return {
-    #         'name': 'Sia',
-    #         'genres': {
-    #             'name': 'pop',
-    #         },
-    #     }
+
     
     @orm.db_session
     def test(self):
@@ -84,6 +65,7 @@ class Test(unittest.TestCase):
             items = self.qbuilder.make_select()
             self.assertEqual(len(items), 1)
             self.assertEqual(items[0], {
+                'id': 1,
                 'name': 'Sia',
                 'genres': [{
                     'name': 'pop',
@@ -106,16 +88,28 @@ class Test(unittest.TestCase):
             
     @orm.db_session
     def test_order_by_func(self):
-        g = self.db.Genre(name='rock')
-        self.db.Artist(name='Umka', age=55, genres=[g])
-        self.db.Artist(name='Fedorov', age=53, genres=[g])
-        orm.flush()
-        
-        @self.qbuilder.order_by
-        def _():
-            return orm.desc(x.name)
-        items = self.qbuilder.make_select()
-        obj = items[0]
-        self.assertEqual(obj.name, 'Umka')
-        obj = items[-1]
-        self.assertEqual(obj.name, 'Fedorov')
+    
+        qbuilder = QueryBuilder(
+            entity=self.db.Artist,
+            paths=[
+                ['id'],
+                ['genres', 'name'],
+                ['name'],
+            ],
+            ifs='x.age > 45')
+    
+        import ipdb
+        with ipdb.launch_ipdb_on_exception():
+            g = self.db.Genre(name='rock')
+            self.db.Artist(name='Umka', age=55, genres=[g])
+            self.db.Artist(name='Fedorov', age=53, genres=[g])
+            orm.flush()
+            
+            @qbuilder.order_by
+            def _():
+                return orm.desc(x.name)
+            items = qbuilder.make_select()
+            self.assertEqual(
+                [obj.name for obj in items],
+                ['Umka', 'Fedorov']
+            )
