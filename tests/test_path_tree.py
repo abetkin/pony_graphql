@@ -46,12 +46,12 @@ class Test(unittest.TestCase):
                 list(objects),
                 [
                     {
-                        'genres': {'name': {'rock', 'pop'}},
+                        'genres': [{'name': 'pop'}, {'name': 'rock'}],
                         'id': 1,
                         'name': 'Sting'
                     },
                     {
-                        'genres': {'name': {'jazz'}},
+                        'genres': [{'name': 'jazz'}],
                         'id': 2,
                         'name': 'Django'
                     }
@@ -91,30 +91,19 @@ class Test(unittest.TestCase):
             ]
             tree = PathTree.from_paths(paths, parent=parent)
             objects = tree.iterate_through(items)
-            result = list(objects)
-            import ipdb; ipdb.set_trace()
             self.assertEqual(
                 list(objects), 
-                    [
+                [
                     {
-                        'genres': [
-                            {'name': 'pop'},
-                            {'name': 'rock'},
-                        ],
+                        'genres': [{'name': 'pop'}, {'name': 'rock'}],
                         'id': 1,
-                        'hobbies': [
-                            {'name': 'movies'},
-                            {'name': 'sport'},
-                        ],
+                        'hobbies': [{'name': 'movies'}, {'name': 'sport'}]
                     },
                     {
                         'genres': [{'name': 'jazz'}],
                         'id': 2,
-                        'hobbies': [
-                            {'name': 'movies'},
-                            {'name': 'music'},
-                        ],
-                    },
+                        'hobbies': [{'name': 'movies'}, {'name': 'music'}]
+                    }
                 ]
             )
         
