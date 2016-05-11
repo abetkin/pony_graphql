@@ -341,12 +341,6 @@ class EntityConnectionType(EntitySetType):
         if self.field_types is None:
             self.field_types = dict(self.get_field_types())
 
-
-    def QueryBuilder(self, *args, **kw):
-        inst = QueryBuilder(*args, **kw)
-        inst.entity_type = self
-        return inst
-
     __is_root__ = False
     
     @property
@@ -354,13 +348,6 @@ class EntityConnectionType(EntitySetType):
         if self.__is_root__:
             return self
         return None
-
-
-    # FIXME
-    # @property
-    # def name(self):
-    #     entity_name = super(EntityConnectionType, self).name
-    #     return "%sConnection" % entity_name
 
     def get_page_info_type(self):
         return PageInfoType(self.types_dict).as_graphql()
@@ -423,10 +410,9 @@ class EntityConnectionType(EntitySetType):
         for chain in tra:
             chain = list(self.get_pony_chain(chain))
             select_paths.append(chain)
-        # query = self.get_query(paths, obj, **kwargs)
         
         
-        builder = self.QueryBuilder(
+        builder = QueryBuilder(
             entity=self.entity,
             paths=select_paths,
             ifs=kwargs.get('ifs'),
@@ -434,10 +420,13 @@ class EntityConnectionType(EntitySetType):
         )
         query = builder.query
         page = self.paginate_query(query, **kwargs)
-        page = [
-            builder._parse_result(result)
-            for result in page
-        ]
+        builder.query = page
+        page = builder.make_select()
+        
+        # FIXME
+        # keep the original paths also
+        # use stripped paths only for query
+        
         edges = []
         for index, obj in enumerate(page):
             edges.append(as_object({
@@ -484,26 +473,6 @@ class EntityConnectionType(EntitySetType):
             order_by = lambda: orm.desc(x.id)
         return EntitySetType.get_query(self, obj, order_by=order_by, **kwargs)        
 
-
-class QueryResult(object):
-    # Tree ?
-
-    def __init__(self, entity, types_dict, result, **kw):
-        self.entity = entity
-        self.types_dict = types_dict
-        self.result = result
-        self.__dict__.update(kw)
-
-    @property
-    def items(self):
-        return [e.node for e in self.edges]
-    
-    @property
-    def entity_type(self):
-        1
-    
-    def __getattr__(self, key):
-        ret = getattr(self.result, key)
 
 
 @Type.register(int)

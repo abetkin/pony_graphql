@@ -15,9 +15,8 @@ from pony_graphql.main import generate_schema
 from graphql.core.execution.executor import Executor
 from graphql.core.execution.middlewares.sync import SynchronousExecutionMiddleware
 
-import ipdb
 
-class SmartQueryTest(unittest.TestCase):
+class Test(unittest.TestCase):
     
     db_name = 'sqtest.db'
 
